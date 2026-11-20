@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>GeneRacer</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>
+    <h1>GeneRacer</h1>
+    <nav>
+      <button data-tab="garage" class="active">Garage</button>
+      <button data-tab="race">Race (hotseat)</button>
+      <button data-tab="trial">Time trial</button>
+      <button data-tab="records">Hall of fame</button>
+    </nav>
+    <div class="profile-bar">
+      <span class="swatch" id="profile-swatch"></span>
+      <label for="profile-select">Player</label>
+      <select id="profile-select"></select>
+      <button class="small" id="btn-profile-new">New player</button>
+      <button class="small" id="btn-profile-rename">Rename</button>
+      <button class="small" id="btn-profile-delete">Delete</button>
+    </div>
+  </header>
+
+  <main>
+    <!-- GARAGE -->
+    <section id="tab-garage" class="tab active">
+      <h2 id="garage-title">Garage</h2>
+      <div class="toolbar">
+        <button id="btn-random" class="primary">Generate random car</button>
+        <button id="btn-breed" disabled>Breed selected (0/2)</button>
+        <span class="hint">Tick two cars to breed them. Retired cars can still breed, but cannot race.</span>
+      </div>
+      <div class="garage-layout">
+        <div id="car-grid" class="car-grid"></div>
+        <aside id="car-detail" class="car-detail empty">Select a car to see its stats and genes.</aside>
+      </div>
+    </section>
+
+    <!-- HOTSEAT RACE SETUP -->
+    <section id="tab-race" class="tab">
+      <h2>Hotseat race</h2>
+      <p class="hint">Each player picks one of their own cars. Players drive one after another on the same keyboard. Finishers rank by time; everyone else by how far they got. Earlier runs appear as ghosts.</p>
+      <h3>Players</h3>
+      <div id="player-list"></div>
+      <div class="toolbar">
+        <button id="btn-add-player">Add player</button>
+        <button id="btn-start-race" class="primary">Start race</button>
+      </div>
+      <h3>Track</h3>
+      <div id="race-tracks"></div>
+    </section>
+
+    <!-- TIME TRIAL SETUP -->
+    <section id="tab-trial" class="tab">
+      <h2>Time trial</h2>
+      <p class="hint">Drive alone to get into the shared hall of fame. Choose which hall of fame runs drive along with you as ghosts.</p>
+      <h3>Driver and car</h3>
+      <div class="player-row">
+        <span id="trial-driver" class="driver-name"></span>
+        <div id="trial-car"></div>
+        <label class="ghost-mode">Ghosts
+          <select id="ghost-mode">
+            <option value="top3">Top 3 + my best</option>
+            <option value="first">Number 1 only</option>
+            <option value="mine">My best only</option>
+            <option value="top10">Whole top 10</option>
+            <option value="none">No ghosts</option>
+          </select>
+        </label>
+      </div>
+      <div class="toolbar"><button id="btn-start-trial" class="primary">Start time trial</button></div>
+      <h3>Track</h3>
+      <div id="trial-tracks"></div>
+    </section>
+
+    <!-- RECORDS -->
+    <section id="tab-records" class="tab">
+      <h2>Hall of fame</h2>
+      <p class="hint">The ten best time-trial runs on each track, shared by all players. Each player and car can hold one place; a new run replaces it only if it is better. Finishers rank by time, everyone else by distance.</p>
+      <div id="records-table"></div>
+    </section>
+  </main>
+
+  <!-- RACE SCREEN -->
+  <div id="race-screen" class="hidden">
+    <canvas id="race-canvas"></canvas>
+    <div id="race-overlay" class="overlay hidden"></div>
+    <div class="race-help">Arrows: drive &nbsp; M: sound on/off &nbsp; Esc: give up run</div>
+  </div>
+
+  <script src="carart.js"></script>
+  <script src="sound.js"></script>
+  <script src="tracks.js"></script>
+  <script src="race.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
