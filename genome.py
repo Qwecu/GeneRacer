@@ -22,7 +22,7 @@ new variation entering the population.
 import copy
 import random
 
-NUM_GENES = 37
+NUM_GENES = 41
 MUTATION_RATE = 0.025      # chance per allele per breeding
 MUTATION_STEP = 40         # max change of a mutated allele value
 

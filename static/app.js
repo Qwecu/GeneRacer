@@ -151,6 +151,7 @@ function renderGarage() {
     pick.onclick = (ev) => { ev.stopPropagation(); toggleBreedPick(car.id); };
     card.appendChild(pick);
     card.appendChild(carThumbnail(car.looks));
+    card.insertAdjacentHTML('beforeend', `<div class="card-trophies">${trophyBadges(car)}</div>`);
     const lifeLeft = Math.max(0, 1 - car.odometer_km / car.stats.lifespan_km);
     card.insertAdjacentHTML('beforeend', `
       <div class="name">${esc(car.name)}</div>
@@ -180,7 +181,7 @@ function toggleBreedPick(id) {
 function statBar(info, value) {
   const f = Math.max(0, Math.min(1, (value - info.lo) / (info.hi - info.lo)));
   const goodness = info.higher_better ? f : 1 - f;
-  const hue = Math.round(goodness * 120);
+  const hue = info.higher_better === null ? 210 : Math.round(goodness * 120);
   return `<div class="stat-row"><span>${info.label}</span>
     <div class="stat-bar"><div style="width:${Math.max(3, f * 100)}%;background:hsl(${hue},55%,50%)"></div></div>
     <span class="stat-val">${value} ${info.unit}</span></div>`;
@@ -212,6 +213,7 @@ function renderDetail() {
       ${car.races} runs &middot; odometer ${car.odometer_km.toFixed(2)} of ${car.stats.lifespan_km} km
       ${car.retired ? '&middot; <b>retired</b>' : ''}</div>
     <div id="detail-thumb"></div>
+    ${trophyListHTML(car)}
     <div class="toolbar sound-row">
       <button class="small" id="btn-hear-engine">Hear engine</button>
       <button class="small" id="btn-hear-gulp">Hear refuelling</button>
@@ -381,7 +383,7 @@ function renderTrackList(containerId, which, selectedId, onPick) {
 
 function carLabelHTML(car) {
   return `<img class="car-icon" src="${carIconURL(car.looks)}" alt="">
-    <span class="cp-text"><b>${esc(car.name)}</b>
+    <span class="cp-text"><span><b>${esc(car.name)}</b> ${trophyBadges(car)}</span>
     <span class="cp-meta">gen ${car.generation} &middot; ${car.stats.power} kW &middot; ${car.stats.max_speed} km/h &middot;
       ${Math.max(0, car.stats.lifespan_km - car.odometer_km).toFixed(1)} km left</span></span>`;
 }
@@ -554,6 +556,36 @@ async function afterRace(results) {
 // =====================================================================
 
 function hallOf(def) { return state.records[recordKey(def)] || []; }
+
+// =====================================================================
+// Trophies: a car holds gold / silver / bronze for every visible track
+// where it is currently 1st / 2nd / 3rd in the hall of fame.
+// =====================================================================
+
+const MEDALS = [['gold', 'Gold'], ['silver', 'Silver'], ['bronze', 'Bronze']];
+
+function trophiesOf(car) {
+  const t = { gold: [], silver: [], bronze: [] };
+  for (const def of visibleTracks()) {
+    hallOf(def).slice(0, 3).forEach((e, i) => {
+      if (e.car_id === car.id) t[MEDALS[i][0]].push(def.name);
+    });
+  }
+  return t;
+}
+
+function trophyBadges(car) {
+  const t = trophiesOf(car);
+  return MEDALS.filter(([k]) => t[k].length).map(([k, label]) =>
+    `<span class="medal ${k}" title="${label}: ${esc(t[k].join(', '))}">${t[k].length}</span>`).join('');
+}
+
+function trophyListHTML(car) {
+  const t = trophiesOf(car);
+  const rows = MEDALS.flatMap(([k, label]) => t[k].map(name =>
+    `<div class="trophy-row"><span class="medal ${k}">${label[0]}</span> ${label} on ${esc(name)}</div>`));
+  return rows.length ? `<div class="trophy-list">${rows.join('')}</div>` : '';
+}
 
 // Entries remember the player's id, so renamed players show their new name;
 // runs by deleted players keep the name they had.

@@ -196,3 +196,18 @@ header { flex-wrap: wrap; }
 .track-card .holder { color: var(--text); }
 .hall-track td { white-space: nowrap; }
 .ghost-mode { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 0.9rem; }
+
+/* ---------- trophies ---------- */
+.medal {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 18px; height: 18px; padding: 0 4px; border-radius: 9px;
+  font-size: 0.7rem; font-weight: 700; color: #222; vertical-align: middle;
+  box-shadow: inset 0 -2px 0 rgba(0,0,0,0.2);
+}
+.medal + .medal { margin-left: 3px; }
+.medal.gold { background: linear-gradient(#ffe066, #e0a800); }
+.medal.silver { background: linear-gradient(#f2f2f2, #a8adb3); }
+.medal.bronze { background: linear-gradient(#f0b07a, #b0652a); color: #fff; }
+.card-trophies { position: absolute; top: 8px; right: 8px; }
+.trophy-list { margin: 4px 0 10px; font-size: 0.85rem; }
+.trophy-row { margin: 2px 0; }

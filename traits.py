@@ -53,9 +53,13 @@ GENE_MAP = [
     ("cylinders",          "dominant", "How lumpy the engine sounds (2 to 12 cylinders)"),
     ("gulp pitch",         "avg",      "Pitch of the refuelling gulps"),
     ("gulp rhythm",        "dominant", "How fast the car gulps fuel (sound only)"),
+    ("let-go forward",     "dominant", "How long the gas keeps pulling after you release it"),
+    ("let-go back",        "dominant", "How long the brake keeps biting after you release it"),
+    ("let-go left",        "dominant", "How long the car keeps turning left after you release it"),
+    ("let-go right",       "dominant", "How long the car keeps turning right after you release it"),
 ]
 
-assert len(GENE_MAP) == 37
+assert len(GENE_MAP) == 41
 
 # Displayed stats: key, label, unit, lo, hi, higher_is_better
 TRAIT_INFO = [
@@ -67,13 +71,17 @@ TRAIT_INFO = [
     ("light_range",   "Headlight reach",  "m",     20,  110, True),
     ("grip",          "Dry grip",         "",    0.55, 1.15, True),
     ("wet_grip",      "Wet grip",         "",    0.30, 1.00, True),
-    ("steer_left",    "Steer left",       "deg/s",  80,  220, True),
-    ("steer_right",   "Steer right",      "deg/s",  80,  220, True),
-    ("back_power",    "Brake / reverse",  "",     180,  600, True),
-    ("react_forward", "Gas reflex",       "ms",    20,  350, False),
-    ("react_back",    "Brake reflex",     "ms",    20,  350, False),
-    ("react_left",    "Left reflex",      "ms",    20,  350, False),
-    ("react_right",   "Right reflex",     "ms",    20,  350, False),
+    ("steer_left",    "Steer left",       "deg/s",  60,  260, None),
+    ("steer_right",   "Steer right",      "deg/s",  60,  260, None),
+    ("back_power",    "Brake / reverse",  "",     150, 1100, None),
+    ("react_forward", "Gas reflex",       "ms",     0,  600, False),
+    ("react_back",    "Brake reflex",     "ms",     0,  600, False),
+    ("react_left",    "Left reflex",      "ms",     0,  600, False),
+    ("react_right",   "Right reflex",     "ms",     0,  600, False),
+    ("release_forward", "Gas let-go",     "ms",     0,  700, False),
+    ("release_back",  "Brake let-go",     "ms",     0,  700, False),
+    ("release_left",  "Left let-go",      "ms",     0,  700, False),
+    ("release_right", "Right let-go",     "ms",     0,  700, False),
     ("tank",          "Fuel tank",        "L",     12,   90, True),
     ("efficiency",    "Fuel efficiency",  "",    0.50, 1.60, True),
     ("range_km",      "Est. range (tank)", "km",  0.3, 10.0, True),
@@ -116,7 +124,10 @@ def express_car(genome: CarGenome):
     max_speed_px = 170 + 210 * (0.5 * g(14) + 0.5 * g(15))
 
     def reflex(i):
-        return round(20 + 330 * (1 - g(i)))
+        return round(600 * (1 - g(i)))
+
+    def let_go(i):
+        return round(700 * (1 - g(i)))
 
     stats = {
         "weight": round(weight),
@@ -129,13 +140,17 @@ def express_car(genome: CarGenome):
         "light_range_px": round(80 + 360 * g(16)),
         "grip": round(0.55 + 0.6 * g(18), 3),
         "wet_grip": round(0.3 + 0.7 * g(19), 3),
-        "steer_left": round(80 + 140 * g(20)),
-        "steer_right": round(80 + 140 * g(21)),
-        "back_power": round(180 + 420 * g(22)),
+        "steer_left": round(60 + 200 * g(20)),
+        "steer_right": round(60 + 200 * g(21)),
+        "back_power": round(150 + 950 * g(22)),
         "react_forward": reflex(23),
         "react_back": reflex(24),
         "react_left": reflex(25),
         "react_right": reflex(26),
+        "release_forward": let_go(37),
+        "release_back": let_go(38),
+        "release_left": let_go(39),
+        "release_right": let_go(40),
         "tank": round(12 + 78 * g(27), 1),
         "efficiency": round(0.5 + 1.1 * g(28), 3),
         "lifespan_km": round(20 + 180 * (0.5 * g(29) + 0.5 * g(30)), 1),

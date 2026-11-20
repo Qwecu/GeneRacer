@@ -8,7 +8,11 @@
 const PLAYER_COLORS = ['#e74c3c', '#3498db', '#2ecc71', '#f1c40f', '#9b59b6', '#e67e22'];
 const CONTROLS = ['up', 'down', 'left', 'right'];
 const KEYMAP = { ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right' };
+// Separate genes for how fast each control reacts when pressed, and when released.
 const DELAY_KEY = { up: 'react_forward', down: 'react_back', left: 'react_left', right: 'react_right' };
+const RELEASE_KEY = { up: 'release_forward', down: 'release_back', left: 'release_left', right: 'release_right' };
+// Brakes stronger than this multiple of the tyres' traction lock the wheels.
+const LOCK_LIMIT = 1.7;   // about 30% of random cars lock on a dry road, ~70% in rain
 
 const PHYS_DT = 1 / 120;
 const FUEL_KG_PER_L = 0.75;
@@ -90,11 +94,14 @@ class CarRun {
     const st = this.st, def = this.track.def, track = this.track;
     this.time += dt;
 
-    // --- genetic reaction delays: a command takes effect only after its delay ---
+    // --- genetic reaction delays: pressing a key takes effect after the press
+    //     delay, releasing it after the (separate) let-go delay ---
     for (const c of CONTROLS) {
-      const q = this.queue[c], delay = st[DELAY_KEY[c]] / 1000;
-      while (q.length && q[0].t + delay <= this.time) this.eff[c] = q.shift().v;
+      const q = this.queue[c];
+      const delay = e => (e.v ? st[DELAY_KEY[c]] : (st[RELEASE_KEY[c]] ?? st[DELAY_KEY[c]])) / 1000;
+      while (q.length && q[0].t + delay(q[0]) <= this.time) this.eff[c] = q.shift().v;
     }
+    this.locked = false;
 
     const fx = Math.cos(this.a), fy = Math.sin(this.a);
     const rx = -fy, ry = fx;
@@ -119,7 +126,11 @@ class CarRun {
     }
     if (this.eff.down) {
       if (vf > 8) {
-        vf = Math.max(0, vf - Math.min(st.back_power, traction * 1.3) * dt);
+        // Brakes stronger than the tyres can hold lock the wheels: the car
+        // slides, stops less well and barely steers.
+        this.locked = st.back_power > traction * LOCK_LIMIT;
+        const decel = this.locked ? traction * 0.85 : st.back_power;
+        vf = Math.max(0, vf - decel * dt);
         driven = true;
       } else if (hasFuel) {
         const revMax = 0.3 * vmax;
@@ -137,7 +148,7 @@ class CarRun {
     this.fuel = Math.max(0, this.fuel);
 
     // sideways grip: wet or icy tyres let the car slide
-    const maxLat = 1100 * gripFactor * dt;
+    const maxLat = 1100 * gripFactor * dt * (this.locked ? 0.35 : 1);
     vl -= Math.max(-maxLat, Math.min(maxLat, vl));
 
     // steering: separate genes for left and right
@@ -145,7 +156,8 @@ class CarRun {
     if (steer !== 0) {
       const rate = (steer > 0 ? st.steer_right : st.steer_left) * Math.PI / 180;
       const spd = Math.abs(vf);
-      const omega = steer * rate * Math.min(1, spd / 80) * Math.sign(vf) * (1 - 0.35 * Math.min(1, spd / vmax));
+      const omega = steer * rate * Math.min(1, spd / 80) * Math.sign(vf) * (1 - 0.35 * Math.min(1, spd / vmax))
+        * (this.locked ? 0.25 : 1);
       this.a += omega * dt;
     }
 
@@ -783,6 +795,7 @@ class RaceSession {
     if (run.refueling) this.banner(ctx, W, 'REFUELING', '#f5c518');
     else if (run.fuel <= 0) this.banner(ctx, W, 'OUT OF FUEL', '#e74c3c');
     else if (run.inPit) this.banner(ctx, W, 'PIT LANE - stop at the pumps', '#f5c518');
+    else if (run.locked) this.banner(ctx, W, 'WHEELS LOCKED', '#e74c3c');
     else if (fuelFrac < 0.15) this.banner(ctx, W, 'LOW FUEL', '#e67e22');
 
     this.drawMinimap(ctx, W, H, ghostPoses);

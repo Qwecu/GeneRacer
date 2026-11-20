@@ -38,6 +38,10 @@ Delete that folder to start over. To use a different save folder, set the
   drive along: top 3 plus your best with this car (default), number 1 only,
   your best only, the whole top 10, or none. Ghost labels are in each player's
   colour. Every track card shows who currently holds number 1.
+- **Trophies**: a car holds a gold, silver or bronze trophy for every track
+  where it is currently 1st, 2nd or 3rd in the hall of fame, so it can lose
+  them. Medals with counts show on garage cards and in the car pickers, and
+  the car's detail panel lists which track each trophy is for.
   The Hall of fame tab lists all tracks. Hotseat races do not count.
 - Controls: arrow keys; Space to start or continue; M to toggle sound; Esc to
   give up a run. Steering in reverse works like a real car: Right while
@@ -101,7 +105,7 @@ reaches the car's genetic lifespan, the car retires.
 
 ## Genes (traits.py)
 
-37 loci, each expressed in one of four ways: `dominant` (the allele with higher
+41 loci, each expressed in one of four ways: `dominant` (the allele with higher
 dominance wins), `avg` (additive), `low` (the weaker allele wins), `high`
 (one strong allele is enough).
 
@@ -114,9 +118,10 @@ dominance wins), `avg` (additive), `low` (the weaker allele wins), `high`
 | Top speed | top speed A (avg) + B (high) | |
 | Headlights | strength (high) | How far you see on night tracks |
 | Friction | tyre grip (dry), tyre compound (share kept in the wet) | Limits acceleration, braking and cornering |
-| Steering | steer left, steer right (separate) | |
-| Forward / back | engine power; back power (brake and reverse) | |
-| Reflexes | forward, back, left, right (separate) | Input delay 20-350 ms per command |
+| Steering | steer left, steer right (separate) | 60-260 deg/s: from sluggish to twitchy |
+| Forward / back | engine power; back power (brake and reverse) | Brakes 150-1100. Brakes stronger than the tyres can hold lock the wheels: the car slides, stops on tyre grip alone and barely steers ("WHEELS LOCKED") |
+| Reflexes | forward, back, left, right (separate) | Delay after pressing a key, 0-600 ms per key |
+| Let-go | let-go forward, back, left, right (separate) | Delay after releasing a key, 0-700 ms per key: the car keeps turning or braking that long |
 | Fuel | tank size (dominant, 12-90 L), efficiency (avg, 0.5-1.6) | Wide range on purpose |
 | Drag | drag | Speed lost when coasting |
 | Lifespan | lifespan A (low-dominant) + B (avg) | 20-200 km |

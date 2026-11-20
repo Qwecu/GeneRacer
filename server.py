@@ -122,8 +122,19 @@ class Handler(BaseHTTPRequestHandler):
         pass
 
 
+class Server(ThreadingHTTPServer):
+    # On Windows, address reuse lets a second server bind the same port and
+    # silently share requests with the first one.  Refuse instead.
+    allow_reuse_address = sys.platform != "win32"
+
+
 if __name__ == "__main__":
-    server = ThreadingHTTPServer(("localhost", PORT), Handler)
+    try:
+        server = Server(("localhost", PORT), Handler)
+    except OSError:
+        print(f"Port {PORT} is already in use: is GeneRacer already running? "
+              f"Open http://localhost:{PORT} or stop the other server first.")
+        sys.exit(1)
     url = f"http://localhost:{PORT}"
     print(f"GeneRacer running at {url}  (Ctrl+C to stop)")
     if "--no-browser" not in sys.argv:
