@@ -59,7 +59,7 @@ class Accounts:
                 self.new_admin_password = password
                 os.makedirs(DATA_DIR, exist_ok=True)
                 with open(ADMIN_FILE, "w", encoding="utf-8") as f:
-                    f.write(f"GeneRacer admin login\nusername: {ADMIN_NAME}\npassword: {password}\n"
+                    f.write(f"Make No Mistakes! admin login\nusername: {ADMIN_NAME}\npassword: {password}\n"
                             "Change the password in the game, then delete this file.\n")
             self.data["admin"] = _hash(password)
         now = time.time()

@@ -246,3 +246,14 @@ body:not(.is-admin) .admin-only { display: none; }
 .star svg { width: 100%; height: 100%; display: block; overflow: visible; }
 .star path { fill: #f5c518; stroke: #8a6a00; stroke-width: 1; stroke-linejoin: round; }
 .star text { fill: #3a2c00; font-weight: 700; font-family: inherit; }
+
+/* ---------- star standings ---------- */
+.standings { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; margin-bottom: 20px; align-items: start; }
+.standings td.pts { font-weight: 700; text-align: right; }
+.hall-heading { margin-top: 8px; }
+
+/* ---------- garage size and deleting ---------- */
+.car-count { font-size: 0.9rem; font-weight: 400; color: var(--muted); margin-left: 8px; }
+.car-count.full { color: var(--bad); font-weight: 700; }
+.hint.warn { color: var(--bad); }
+.car-card .card-delete { margin-top: 8px; width: 100%; }

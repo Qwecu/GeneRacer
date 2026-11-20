@@ -1,4 +1,4 @@
-# GeneRacer
+# Make No Mistakes!
 
 Breed race cars, then race them. The genetics model comes from TenderFace: a
 diploid genome (two chromosomes of `(dominance, value)` alleles), single-point
@@ -45,7 +45,10 @@ saved in `data/`. Delete that folder to start over. To use a different save fold
   player deletes their cars; records they set are kept.
 - **Garage**: the current player's cars. Generate a random car, tick two of
   your cars and breed them, or click a car to see its stats and full genotype.
-  Retired cars can still breed.
+  Retired cars can still breed. A player can own at most 20 drivable cars;
+  retired cars do not count (`MAX_CARS` in `garage.py`). When the garage is full,
+  generating and breeding are blocked until cars are deleted. Every card has a
+  Delete button, and "Delete retired cars" clears all retired cars at once.
 - **Race (hotseat)**: 1-6 players drive one after another on the same keyboard.
   Each row picks a player and one of that player's own cars (other players
   first join with their password), and each player
@@ -67,7 +70,9 @@ saved in `data/`. Delete that folder to start over. To use a different save fold
   below its own (5th of 6 places = 1 point). The total shows in a star on the
   car's icon in the garage, the car pickers and the detail panel (no star at 0
   points); hover it for the points per track. Like trophies, only visible tracks count.
-  The Hall of fame tab lists the top 10 of every track, plus your own places
+- **Hall of fame tab**: first the best cars by stars (top 20, "Show all" for
+  the rest) and the players by the stars of all their cars added up; equal
+  stars share a place. Then the top 10 of every track, plus your own places
   further down; "Show all" opens the whole list. Hotseat races do not count.
 - Controls: arrow keys; Space to start or continue; M to toggle sound; Esc to
   give up a run. Steering in reverse works like a real car: Right while

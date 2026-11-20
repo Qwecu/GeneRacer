@@ -3,12 +3,12 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>GeneRacer</title>
+  <title>Make No Mistakes!</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <header>
-    <h1>GeneRacer</h1>
+    <h1>Make No Mistakes!</h1>
     <nav>
       <button data-tab="garage" class="active">Garage</button>
       <button data-tab="race">Race (hotseat)</button>
@@ -67,7 +67,8 @@
       <div class="toolbar">
         <button id="btn-random" class="primary">Generate random car</button>
         <button id="btn-breed" disabled>Breed selected (0/2)</button>
-        <span class="hint">Tick two cars to breed them. Retired cars can still breed, but cannot race.</span>
+        <button id="btn-delete-retired">Delete retired cars</button>
+        <span class="hint" id="garage-hint">Tick two cars to breed them. Retired cars can still breed, but cannot race.</span>
       </div>
       <div class="garage-layout">
         <div id="car-grid" class="car-grid"></div>

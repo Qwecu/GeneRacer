@@ -21,6 +21,7 @@ TRACKS_FILE = os.path.join(DATA_DIR, "tracks.json")
 PROFILES_FILE = os.path.join(DATA_DIR, "profiles.json")
 
 STARTER_CARS = 6
+MAX_CARS = 20      # drivable cars one player may own; retired cars do not count
 HALL_SIZE = 100    # places saved in each track's time-trial hall of fame
 GHOST_PLACES = 10  # only the top places keep their ghost (they are large)
 PROFILE_COLORS = ["#e74c3c", "#3498db", "#2ecc71", "#f1c40f", "#9b59b6", "#e67e22",
@@ -245,9 +246,20 @@ class Garage:
 
     # ---------------- cars ----------------
 
+    @staticmethod
+    def _retired(car):
+        _, stats, _ = express_car(CarGenome.from_dict(car["genome"]))
+        return car["odometer_km"] >= stats["lifespan_km"]
+
+    def _check_room(self, owner):
+        drivable = sum(1 for c in self.cars if c.get("owner") == owner and not self._retired(c))
+        if drivable >= MAX_CARS:
+            raise ValueError(f"The garage is full ({MAX_CARS} drivable cars). Delete a car first.")
+
     def random_car(self, owner):
         with _lock:
             self._profile(owner)
+            self._check_room(owner)
             car = self._add(CarGenome(), generation=0, parents=[], owner=owner)
             self._persist()
             return self.public(car)
@@ -257,6 +269,7 @@ class Garage:
             raise ValueError("A car cannot breed with itself")
         with _lock:
             self._profile(owner)
+            self._check_room(owner)
             a = self._find(id_a)
             b = self._find(id_b)
             if a.get("owner") != owner or b.get("owner") != owner:
@@ -272,9 +285,10 @@ class Garage:
             self._persist()
             return self.public(child)
 
-    def delete(self, car_id):
+    def delete(self, car_ids):
         with _lock:
-            self.cars = [c for c in self.cars if c["id"] != car_id]
+            gone = set(car_ids)
+            self.cars = [c for c in self.cars if c["id"] not in gone]
             self._persist()
 
     def rename(self, car_id, name):

@@ -1,5 +1,5 @@
 """
-GeneRacer server.  Run:  py server.py   (then open http://localhost:8766)
+Make No Mistakes! server.  Run:  py server.py   (then open http://localhost:8766)
 
 Serves the static front end from ./static and a small JSON API backed by
 garage.py.  Standard library only.
@@ -16,7 +16,7 @@ import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from accounts import ADMIN_FILE, ADMIN_NAME, Accounts
-from garage import Garage
+from garage import MAX_CARS, Garage
 from traits import trait_info_json
 
 PORT = 8766
@@ -77,7 +77,7 @@ class Handler(BaseHTTPRequestHandler):
                                            garage._profile(who["profile_id"])["name"]})
             self._who()
             if path == "/api/garage":
-                return self._json({"cars": garage.list(), "trait_info": trait_info_json()})
+                return self._json({"cars": garage.list(), "trait_info": trait_info_json(), "max_cars": MAX_CARS})
             if path == "/api/profiles":
                 return self._json([{**p, "has_password": accounts.has_password(p["id"])}
                                    for p in garage.list_profiles()])
@@ -146,8 +146,11 @@ class Handler(BaseHTTPRequestHandler):
             self._may(who, body["owner"])
             return self._json(garage.breed(body["a"], body["b"], body["owner"]))
         if path == "/api/delete":
-            self._may(who, garage.owner_of(body["id"]))
-            garage.delete(body["id"])
+            # one car {"id"} or several {"ids": [...]}
+            ids = body["ids"] if "ids" in body else [body["id"]]
+            for car_id in ids:
+                self._may(who, garage.owner_of(car_id))
+            garage.delete(ids)
             return ok()
         if path == "/api/rename":
             self._may(who, garage.owner_of(body["id"]))
@@ -249,14 +252,14 @@ if __name__ == "__main__":
     try:
         server = Server(("localhost", PORT), Handler)
     except OSError:
-        print(f"Port {PORT} is already in use: is GeneRacer already running? "
+        print(f"Port {PORT} is already in use: is Make No Mistakes! already running? "
               f"Open http://localhost:{PORT} or stop the other server first.")
         sys.exit(1)
     url = f"http://localhost:{PORT}"
     if accounts.new_admin_password:
         print(f"Created the admin account.  Username: {ADMIN_NAME}  Password: {accounts.new_admin_password}")
         print(f"(Also saved in {ADMIN_FILE}.  Change it in the game; the file is then deleted.)")
-    print(f"GeneRacer running at {url}  (Ctrl+C to stop)")
+    print(f"Make No Mistakes! running at {url}  (Ctrl+C to stop)")
     if "--no-browser" not in sys.argv:
         webbrowser.open(url)
     try:

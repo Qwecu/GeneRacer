@@ -125,6 +125,7 @@ function askForm(title, fields) {
 async function loadAll() {
   const g = await api('/api/garage');
   state.cars = g.cars;
+  state.maxCars = g.max_cars;
   state.profiles = await api('/api/profiles');
   if (!profileById(state.profileId)) setProfile(state.profiles[0]?.id || null);
   // hotseat rows: the first is the current player, the others different players in order
@@ -265,7 +266,26 @@ document.getElementById('btn-profile-delete').onclick = async () => {
 function renderGarage() {
   const grid = document.getElementById('car-grid');
   grid.innerHTML = '';
-  document.getElementById('garage-title').textContent = `${me().name}'s garage`;
+  const own = carsOf(state.profileId);
+  const drivable = own.filter(c => !c.retired).length;     // retired cars do not count towards the limit
+  const full = drivable >= state.maxCars;
+  document.getElementById('garage-title').innerHTML =
+    `${esc(me().name)}'s garage <span class="car-count${full ? ' full' : ''}">${drivable} / ${state.maxCars} drivable cars` +
+    `${own.length > drivable ? ` + ${own.length - drivable} retired` : ''}</span>`;
+  document.getElementById('btn-random').disabled = full;
+  const hint = document.getElementById('garage-hint');
+  hint.textContent = full
+    ? `The garage is full. Delete drivable cars, or drive them until they retire, to make room.`
+    : 'Tick two cars to breed them. Retired cars can still breed, but cannot race.';
+  hint.classList.toggle('warn', full);
+  const retired = own.filter(c => c.retired);
+  const delRetired = document.getElementById('btn-delete-retired');
+  delRetired.textContent = `Delete retired cars (${retired.length})`;
+  delRetired.disabled = !retired.length;
+  delRetired.onclick = async () => {
+    if (!confirm(`Delete all ${retired.length} retired cars: ${retired.map(c => c.name).join(', ')}? This cannot be undone.`)) return;
+    try { await api('/api/delete', { ids: retired.map(c => c.id) }); await loadAll(); } catch (e) { alert(e.message); }
+  };
   const sorted = [...carsOf(state.profileId)].sort((a, b) => (a.retired - b.retired) || (b.generation - a.generation));
   for (const car of sorted) {
     const card = document.createElement('div');
@@ -292,12 +312,18 @@ function renderGarage() {
         ${car.retired ? '<span class="badge retired">retired</span>' : ''}</div>
       <div class="meta">${car.odometer_km.toFixed(1)} / ${car.stats.lifespan_km} km</div>
       <div class="life-bar"><div style="width:${lifeLeft * 100}%"></div></div>`);
+    const del = document.createElement('button');
+    del.className = 'small card-delete';
+    del.textContent = 'Delete';
+    del.title = `Delete ${car.name}`;
+    del.onclick = (ev) => { ev.stopPropagation(); deleteCar(car); };
+    card.appendChild(del);
     card.onclick = () => { state.viewing = car.id; renderGarage(); };
     grid.appendChild(card);
   }
   const btn = document.getElementById('btn-breed');
   btn.textContent = `Breed selected (${state.breedPick.length}/2)`;
-  btn.disabled = state.breedPick.length !== 2;
+  btn.disabled = state.breedPick.length !== 2 || full;
   renderDetail();
 }
 
@@ -366,18 +392,27 @@ function renderDetail() {
     const name = prompt('New name', car.name);
     if (name) { await api('/api/rename', { id: car.id, name }); loadAll(); }
   };
-  el.querySelector('#btn-delete').onclick = async () => {
-    if (confirm(`Scrap ${car.name}? This cannot be undone.`)) {
-      await api('/api/delete', { id: car.id });
-      loadAll();
-    }
-  };
+  el.querySelector('#btn-delete').onclick = () => deleteCar(car);
+}
+
+async function deleteCar(car) {
+  const t = trophiesOf(car), medals = t.gold.length + t.silver.length + t.bronze.length;
+  const warn = medals || pointsOf(car).total
+    ? ` Its hall of fame runs stay, but its ${pointsOf(car).total} stars and ${medals} trophies no longer count for you.` : '';
+  if (!confirm(`Delete ${car.name}? This cannot be undone.${warn}`)) return;
+  try {
+    await api('/api/delete', { id: car.id });
+    state.breedPick = state.breedPick.filter(id => id !== car.id);
+    await loadAll();
+  } catch (e) { alert(e.message); }
 }
 
 document.getElementById('btn-random').onclick = async () => {
-  const car = await api('/api/random', { owner: state.profileId });
-  state.viewing = car.id;
-  loadAll();
+  try {
+    const car = await api('/api/random', { owner: state.profileId });
+    state.viewing = car.id;
+    loadAll();
+  } catch (e) { alert(e.message); }
 };
 
 document.getElementById('btn-breed').onclick = async () => {
@@ -791,6 +826,54 @@ function holderHTML(e) {
   return `<span class="swatch small" style="background:${p ? p.color : '#bbb'}"></span><b>${esc(holderName(e))}</b>`;
 }
 
+// Rank numbers where equal points share a place: 1, 2, 2, 4.
+function sharedRanks(list) {
+  return list.map((x, i) => i > 0 && x.points === list[i - 1].points ? null : i + 1)
+    .map((r, i, a) => { while (r === null) r = a[--i]; return r; });
+}
+
+// Best cars by stars, and players by the stars of all their cars.
+function standingsHTML() {
+  const cars = state.cars.map(c => ({ car: c, points: pointsOf(c).total }))
+    .filter(x => x.points > 0)
+    .sort((a, b) => b.points - a.points || a.car.name.localeCompare(b.car.name));
+  const players = state.profiles.map(p => {
+    const own = carsOf(p.id).map(c => pointsOf(c).total);
+    return { p, points: own.reduce((s, v) => s + v, 0), scoring: own.filter(v => v > 0).length };
+  }).sort((a, b) => b.points - a.points || a.p.name.localeCompare(b.p.name));
+
+  const open = state.hallOpen.has('cars');
+  const carRanks = sharedRanks(cars);
+  const carRows = cars.slice(0, open ? cars.length : 20).map((x, i) => {
+    const owner = profileById(x.car.owner);
+    return `<tr class="${x.car.owner === state.profileId ? 'mine' : ''}">
+      <td class="rank">${carRanks[i]}</td>
+      <td><span class="icon-wrap small"><img class="car-icon" src="${carIconURL(x.car.looks)}" alt="">${starHTML(x.car)}</span>
+        <b>${esc(x.car.name)}</b> ${trophyBadges(x.car)}${x.car.retired ? ' <span class="badge retired">retired</span>' : ''}</td>
+      <td><span class="swatch small" style="background:${owner ? owner.color : '#bbb'}"></span>${owner ? esc(owner.name) : ''}</td>
+      <td class="pts">${x.points}</td></tr>`;
+  }).join('');
+  const playerRanks = sharedRanks(players);
+  const playerRows = players.map((x, i) => `
+    <tr class="${x.p.id === state.profileId ? 'mine' : ''}">
+      <td class="rank">${playerRanks[i]}</td>
+      <td><span class="swatch small" style="background:${x.p.color}"></span><b>${esc(x.p.name)}</b></td>
+      <td class="hint">${x.scoring} of ${x.p.cars} cars scoring</td>
+      <td class="pts">${x.points}</td></tr>`).join('');
+
+  return `<div class="standings">
+    <div class="hall-track">
+      <h3>Best cars</h3><div class="hint">Stars: one for every hall of fame place below the car, on all tracks.</div>
+      ${cars.length ? `<table class="records">${carRows}</table>` : '<p class="hint">No car has stars yet.</p>'}
+      ${cars.length > 20 ? `<button class="small hall-toggle" data-key="cars">${open ? 'Show top 20' : `Show all ${cars.length}`}</button>` : ''}
+    </div>
+    <div class="hall-track">
+      <h3>Best players</h3><div class="hint">The stars of all the player's cars added up.</div>
+      <table class="records">${playerRows}</table>
+    </div>
+  </div>`;
+}
+
 function renderRecords() {
   const blocks = visibleTracks().map(def => {
     const key = recordKey(def);
@@ -813,7 +896,7 @@ function renderRecords() {
     </div>`;
   }).join('');
   const el = document.getElementById('records-table');
-  el.innerHTML = `<div class="hall">${blocks}</div>`;
+  el.innerHTML = standingsHTML() + `<h3 class="hall-heading">Tracks</h3><div class="hall">${blocks}</div>`;
   el.querySelectorAll('.hall-toggle').forEach(b => b.onclick = () => {
     const k = b.dataset.key;
     if (state.hallOpen.has(k)) state.hallOpen.delete(k); else state.hallOpen.add(k);
