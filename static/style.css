@@ -257,3 +257,17 @@ body:not(.is-admin) .admin-only { display: none; }
 .car-count.full { color: var(--bad); font-weight: 700; }
 .hint.warn { color: var(--bad); }
 .car-card .card-delete { margin-top: 8px; width: 100%; }
+
+/* ---------- logo ---------- */
+header h1 .logo { height: 2.2rem; display: block; }
+#logo-flash { position: fixed; inset: 0; z-index: 1000; display: none; align-items: center; justify-content: center;
+  background: rgba(0,0,0,0.85); pointer-events: none; opacity: 0; }
+#logo-flash img { width: min(80vw, 800px); height: auto; }
+#logo-flash.flashing { display: flex; animation: logo-flash 1.6s ease-in-out 1 both; }
+@keyframes logo-flash {
+  0%, 100% { opacity: 0; }
+  12%, 38% { opacity: 1; }
+  50%, 62% { opacity: 0; }
+  72%, 88% { opacity: 1; }
+  96% { opacity: 0; }
+}

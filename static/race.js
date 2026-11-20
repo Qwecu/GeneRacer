@@ -378,6 +378,7 @@ class RaceSession {
 
   start() {
     this.screen.classList.remove('hidden');
+    flashLogo();
     window.addEventListener('keydown', this._onKey);
     window.addEventListener('keyup', this._onKey);
     this.prepareTurn();

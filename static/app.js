@@ -40,6 +40,16 @@ async function api(path, body) {
 // Login and registration
 // =====================================================================
 
+// Flashes the logo twice over the whole screen (login page, race start).
+function flashLogo() {
+  const el = document.getElementById('logo-flash');
+  if (!el) return;
+  el.classList.remove('flashing');
+  void el.offsetWidth;   // restart the animation
+  el.classList.add('flashing');
+  el.onanimationend = () => el.classList.remove('flashing');
+}
+
 function showLogin() {
   storeToken('');
   state.session = null;
@@ -47,6 +57,7 @@ function showLogin() {
   document.body.classList.add('logged-out');
   document.body.classList.remove('is-admin');
   document.getElementById('login-screen').classList.remove('hidden');
+  flashLogo();
 }
 
 async function startSession() {
@@ -57,6 +68,7 @@ async function startSession() {
   document.body.classList.toggle('is-admin', me.admin);
   document.getElementById('login-screen').classList.add('hidden');
   if (!me.admin) setProfile(me.profile_id);
+  if (!me.admin && document.getElementById('tab-race').classList.contains('active')) showTab('garage');   // hotseat is admin only
   state.players = [{ profileId: null, carId: null }, { profileId: null, carId: null }];
   resetPlayerView();
   await loadAll();
@@ -475,7 +487,7 @@ function renderTrackList(containerId, which, selectedId, onPick) {
   // custom track form
   const tools = document.createElement('div');
   tools.innerHTML = trackToolsHTML();
-  el.appendChild(tools);
+  if (state.session.admin) el.appendChild(tools);   // only the admin adds tracks
   tools.querySelector('.tt-create').onclick = async () => {
     const seedText = tools.querySelector('.tt-seed').value.trim();
     if (!seedText) return alert('Type a seed first: any number or word.');
@@ -518,15 +530,15 @@ function renderTrackList(containerId, which, selectedId, onPick) {
     };
     if (def.unsaved) {
       button('New random track', () => { state.randomDefs[which] = rollRandomDef(); onPick(state.randomDefs[which].id); });
-      button('Save track', async () => {
+      if (state.session.admin) button('Save track', async () => {
         await saveTrack(def);
         state.randomDefs[which] = rollRandomDef();
         await loadAll();
         onPick(def.id);
       });
     } else if (def.custom) {
-      // custom tracks: the player who saved it, or the admin
-      if (state.session.admin || def.owner === state.session.profile_id) button('Delete', async () => {
+      // only the admin deletes tracks
+      if (state.session.admin) button('Delete', async () => {
         if (!confirm(`Delete "${def.name}" and its record?`)) return;
         await api('/api/tracks/delete', { id: def.id, builtin: false });
         loadAll();

@@ -23,15 +23,15 @@ saved in `data/`. Delete that folder to start over. To use a different save fold
   their own garage with six random cars. The username is the player's name in
   the game.
 - **Players** can only change their own page: their cars, name, password, or
-  deleting their account. They can race, save tracks and delete tracks they
-  saved themselves.
+  deleting their account. They can race on every track but cannot add or
+  delete tracks.
 - **Admin**: one account with the username `admin`. On the first start its
   password is taken from the `GENERACER_ADMIN_PASSWORD` environment variable,
   or generated, printed in the server console and saved in
   `data/admin_password.txt` (deleted when the admin changes the password in the
   game). The admin sees every player in the top-right corner and acts as any of
-  them, creates players, sets their passwords, and removes or restores
-  built-in tracks.
+  them, creates players, sets their passwords, and adds, removes or restores
+  tracks.
 - **Older saves**: players created before logins existed have no password and
   cannot log in until the admin sets one (act as the player, then "Password").
 - **Hotseat**: other players join a race on your screen by typing their own
@@ -49,7 +49,7 @@ saved in `data/`. Delete that folder to start over. To use a different save fold
   retired cars do not count (`MAX_CARS` in `garage.py`). When the garage is full,
   generating and breeding are blocked until cars are deleted. Every card has a
   Delete button, and "Delete retired cars" clears all retired cars at once.
-- **Race (hotseat)**: 1-6 players drive one after another on the same keyboard.
+- **Race (hotseat)** (admin only in the UI): 1-6 players drive one after another on the same keyboard.
   Each row picks a player and one of that player's own cars (other players
   first join with their password), and each player
   drives in their own colour. Earlier runs appear as ghosts. Finishers rank by
@@ -95,14 +95,16 @@ car's headlights (genetic reach) and the pit lights cut through the dark. Fog
 limits sight to a short radius around the car. Rain uses the tyre-compound
 gene; snow uses it too, with a further penalty.
 
-**Your own tracks.** Type a seed (any number or word) above the track list,
+**Custom tracks (admin only).** Type a seed (any number or word) above the track list,
 optionally a name, and optionally force the shape, time of day or weather;
 everything else comes from the seed, and the same seed always gives the same
 track. "Create and save track" stores it in `data/tracks.json`, and it keeps its
 own record like the built-in tracks. The last card is an unsaved random track:
-"New random track" rolls another, "Save track" keeps it.
+"New random track" rolls another, "Save track" keeps it. Players see the
+random track card and can race on it, but only the admin sees the seed form
+and "Save track".
 
-**Deleting tracks.** Every card has a Delete button. A saved custom track is
+**Deleting tracks.** Only the admin sees the Delete button. A saved custom track is
 removed together with its record. A built-in track is only hidden (its record
 is kept), and a "Restore removed built-in tracks" button brings them back.
 

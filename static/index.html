@@ -4,14 +4,16 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Make No Mistakes!</title>
+  <link rel="icon" type="image/svg+xml" href="logo.svg">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
+  <div id="logo-flash" aria-hidden="true"><img src="logo.svg" alt=""></div>
   <header>
-    <h1>Make No Mistakes!</h1>
+    <h1><img src="logo.svg" alt="Make No Mistakes!" class="logo"></h1>
     <nav>
       <button data-tab="garage" class="active">Garage</button>
-      <button data-tab="race">Race (hotseat)</button>
+      <button data-tab="race" class="admin-only">Race (hotseat)</button>
       <button data-tab="trial">Time trial</button>
       <button data-tab="records">Hall of fame</button>
     </nav>

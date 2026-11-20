@@ -210,12 +210,12 @@ class Handler(BaseHTTPRequestHandler):
 
         # ---- tracks (shared) ----
         if path == "/api/tracks/save":
-            garage.save_track(body["track"], who["profile_id"] or ADMIN_NAME)
+            self._admin(who)
+            garage.save_track(body["track"], ADMIN_NAME)
             return ok()
         if path == "/api/tracks/delete":
+            self._admin(who)
             builtin = bool(body.get("builtin"))
-            if builtin or garage.track_owner(body["id"]) != who["profile_id"]:
-                self._admin(who)
             garage.delete_track(body["id"], builtin)
             return ok()
         if path == "/api/tracks/restore":
