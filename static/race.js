@@ -11,6 +11,16 @@ const KEYMAP = { ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight
 // Separate genes for how fast each control reacts when pressed, and when released.
 const DELAY_KEY = { up: 'react_forward', down: 'react_back', left: 'react_left', right: 'react_right' };
 const RELEASE_KEY = { up: 'release_forward', down: 'release_back', left: 'release_left', right: 'release_right' };
+// Drifting: tyres hold until the sideways slip passes DRIFT_START (px/s),
+// then slide on the lower KINETIC share of their grip until the slip falls
+// below DRIFT_END.  The gap between the two makes drifts last.
+const DRIFT_START = 45;
+const DRIFT_END = 15;
+const KINETIC = 0.6;
+const LAT_GRIP = 650;           // sideways grip (px/s²) per unit of tyre grip
+const POWER_OVERSTEER = 0.9;    // rad/s of extra rotation from gas during a slide
+// Walls: share of the impact speed the car bounces back with.
+const WALL_BOUNCE = 0.55;
 // Brakes stronger than this multiple of the tyres' traction lock the wheels.
 const LOCK_LIMIT = 1.7;   // about 30% of random cars lock on a dry road, ~70% in rain
 
@@ -77,6 +87,10 @@ class CarRun {
     this.queue = { up: [], down: [], left: [], right: [] };
     this.ghost = [];
     this.ghostTimer = 0;
+    this.sliding = false;
+    this.slide = 0;          // 0..1, how hard the tyres are sliding (sound, skid marks)
+    this.skids = [];         // skid mark segments [x1, y1, x2, y2, strength]
+    this.wallHit = 0;        // impact speed of the latest wall hit, read by the sound
   }
 
   setInput(ctrl, value) {
@@ -147,9 +161,21 @@ class CarRun {
     if (hasFuel) this.fuel -= 0.03 * dt;  // idle
     this.fuel = Math.max(0, this.fuel);
 
-    // sideways grip: wet or icy tyres let the car slide
-    const maxLat = 1100 * gripFactor * dt * (this.locked ? 0.35 : 1);
+    // --- tyre grip and drifting ---
+    const slip = Math.abs(vl);
+    if (!this.sliding && slip > DRIFT_START) this.sliding = true;
+    else if (this.sliding && slip < DRIFT_END) this.sliding = false;
+    const gas = this.eff.up && hasFuel;
+    let latGrip = LAT_GRIP * gripFactor;
+    if (this.sliding) latGrip *= KINETIC * (gas ? 0.8 : 1);   // spinning wheels hold even less
+    if (this.locked) latGrip *= 0.35;
+    const maxLat = latGrip * dt;
     vl -= Math.max(-maxLat, Math.min(maxLat, vl));
+    // Gas during a slide swings the tail further out (power oversteer).
+    if (this.sliding && gas && vf > 30) {
+      this.a -= Math.sign(vl) * POWER_OVERSTEER * Math.min(1, slip / 120) * dt;
+    }
+    this.slide = this.locked && Math.abs(vf) > 20 ? 1 : this.sliding ? Math.min(1, slip / 150) : 0;
 
     // steering: separate genes for left and right
     const steer = (this.eff.right ? 1 : 0) - (this.eff.left ? 1 : 0);
@@ -166,6 +192,7 @@ class CarRun {
     this.x += this.vx * dt;
     this.y += this.vy * dt;
     this.distPx += Math.hypot(this.vx, this.vy) * dt;
+    this.recordSkid(dt);
 
     // --- walls: the road, plus any pit lane that exists at this point ---
     const loc = locateOnTrack(track, this.x, this.y, this.idx);
@@ -195,8 +222,21 @@ class CarRun {
       this.y -= loc.ny * push;
       const vn = (this.vx * loc.nx + this.vy * loc.ny) * sg;
       if (vn > 0) {
-        this.vx -= loc.nx * sg * vn * 1.35;
-        this.vy -= loc.ny * sg * vn * 1.35;
+        // was the car driving nose-first or reversing into the wall?
+        const fwd = this.vx * Math.cos(this.a) + this.vy * Math.sin(this.a);
+        // bounce back off the wall
+        this.vx -= loc.nx * sg * vn * (1 + WALL_BOUNCE);
+        this.vy -= loc.ny * sg * vn * (1 + WALL_BOUNCE);
+        // the hit swings the car towards running along the wall, in the
+        // direction it is moving along it (nose first, or tail first if reversing)
+        const tx = loc.ny, ty = -loc.nx;                       // wall direction = track direction
+        const vt = this.vx * tx + this.vy * ty;
+        if (Math.abs(vt) > 20) {
+          const along = Math.atan2(ty * Math.sign(vt), tx * Math.sign(vt));
+          const target = along + (fwd < 0 ? Math.PI : 0);
+          this.a += angleDiff(target, this.a) * Math.min(0.5, vn / 400);
+        }
+        if (vn > 25) this.wallHit = Math.max(this.wallHit, vn);
         const dmg = Math.max(0, vn - 50) * 0.3;
         this.hp -= dmg;
         if (dmg > 0) this.lastImpact = this.time;
@@ -252,6 +292,23 @@ class CarRun {
     } else this.stillTimer = 0;
     if (this.time - this.lastProgressTime > STALL_TIME) return this.end('stalled');
     if (this.time > MAX_RUN_TIME) return this.end('timeout');
+  }
+
+  // Rear-wheel skid marks while drifting or with locked wheels.
+  recordSkid(dt) {
+    this.skidTimer = (this.skidTimer || 0) + dt;
+    const L = this.car.looks.length, W = this.car.looks.width;
+    const fx = Math.cos(this.a), fy = Math.sin(this.a);
+    const wheels = [-1, 1].map(s => [this.x - fx * L * 0.3 - fy * s * W * 0.42, this.y - fy * L * 0.3 + fx * s * W * 0.42]);
+    if (this.slide <= 0.15) { this.lastWheels = null; return; }      // not sliding: no marks
+    if (!this.lastWheels) { this.lastWheels = wheels; this.skidTimer = 0; return; }
+    if (this.skidTimer < 1 / 60) return;                             // one segment per 1/60 s
+    for (let i = 0; i < 2; i++) {
+      this.skids.push([this.lastWheels[i][0], this.lastWheels[i][1], wheels[i][0], wheels[i][1], this.slide]);
+    }
+    if (this.skids.length > 4000) this.skids.splice(0, this.skids.length - 4000);
+    this.lastWheels = wheels;
+    this.skidTimer = 0;
   }
 
   end(status) {
@@ -379,7 +436,9 @@ class RaceSession {
     const run = this.run;
     const running = this.phase === 'countdown' || (this.phase === 'running' && run.fuel > 0);
     const throttle = this.phase === 'running' && run.eff.up && run.fuel > 0 ? 1 : 0;
-    this.sound.update(Math.min(1, run.speed / run.st.max_speed_px), throttle, running, run.refueling);
+    this.sound.update(Math.min(1, run.speed / run.st.max_speed_px), throttle, running, run.refueling,
+      this.phase === 'running' ? run.slide : 0);
+    if (run.wallHit) { this.sound.thump(Math.min(1, run.wallHit / 300)); run.wallHit = 0; }
   }
 
   finishTurn() {
@@ -541,6 +600,14 @@ class RaceSession {
         const p = trackPointAt(track, track.startS + km * PX_PER_KM);
         ctx.fillText(`${km} km`, p.x - p.nx * (track.hw + 22), p.y - p.ny * (track.hw + 22) + 5);
       }
+    }
+
+    // skid marks
+    ctx.lineCap = 'round';
+    ctx.lineWidth = 3;
+    for (const [x1, y1, x2, y2, s] of run.skids) {
+      ctx.strokeStyle = `rgba(20,20,20,${0.15 + 0.35 * s})`;
+      ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
     }
 
     // ghosts

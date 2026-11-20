@@ -11,30 +11,51 @@ py server.py            # opens http://localhost:8766
 py server.py --no-browser
 ```
 
-Python 3 standard library only. Players, cars, tracks and records are saved in
-`data/` (created on first run with one player and six random starter cars).
-Delete that folder to start over. To use a different save folder, set the
+Python 3 standard library only. Players, cars, tracks, records and logins are
+saved in `data/`. Delete that folder to start over. To use a different save folder, set the
 `GENERACER_DATA` environment variable to its path.
+
+## Accounts
+
+- **Registration**: anyone can register with a username and a password. Both
+  must be non-empty; anything else is allowed, except that a name already in
+  use and the name `admin` are refused. Registering creates the player's page:
+  their own garage with six random cars. The username is the player's name in
+  the game.
+- **Players** can only change their own page: their cars, name, password, or
+  deleting their account. They can race, save tracks and delete tracks they
+  saved themselves.
+- **Admin**: one account with the username `admin`. On the first start its
+  password is taken from the `GENERACER_ADMIN_PASSWORD` environment variable,
+  or generated, printed in the server console and saved in
+  `data/admin_password.txt` (deleted when the admin changes the password in the
+  game). The admin sees every player in the top-right corner and acts as any of
+  them, creates players, sets their passwords, and removes or restores
+  built-in tracks.
+- **Older saves**: players created before logins existed have no password and
+  cannot log in until the admin sets one (act as the player, then "Password").
+- **Hotseat**: other players join a race on your screen by typing their own
+  password in their row. Logins last 30 days; hotseat joins 12 hours.
+- Passwords are stored as salted PBKDF2 hashes in `data/auth.json`. This is a
+  light login for a local game: the server uses plain HTTP.
 
 ## Gameplay
 
-- **Players**: pick the current player in the top-right corner, or create,
-  rename and delete players there. Every player has their own garage, and a new
-  player starts with six random cars. Deleting a player deletes their cars;
-  records they set are kept. The browser remembers which player was last
-  selected.
+- **Players**: the current player is shown in the top-right corner. Deleting a
+  player deletes their cars; records they set are kept.
 - **Garage**: the current player's cars. Generate a random car, tick two of
   your cars and breed them, or click a car to see its stats and full genotype.
   Retired cars can still breed.
 - **Race (hotseat)**: 1-6 players drive one after another on the same keyboard.
-  Each row picks a player and one of that player's own cars, and each player
+  Each row picks a player and one of that player's own cars (other players
+  first join with their password), and each player
   drives in their own colour. Earlier runs appear as ghosts. Finishers rank by
   time; if nobody finishes, the player who got furthest wins.
 - **Time trial**: the current player drives one of their cars alone. Every run
-  is offered to the track's **hall of fame**, a top-ten list shared by all
+  is offered to the track's **hall of fame**, a top-100 list shared by all
   players. Each player and car can hold one place, replaced only by a better
-  run. Finishers rank by time, everyone else by distance. Every hall of fame
-  run keeps its ghost; the "Ghosts" choice next to the car picker decides which
+  run. Finishers rank by time, everyone else by distance. The top 10 keep their
+  ghosts (a run that drops to place 11 loses it); the "Ghosts" choice next to the car picker decides which
   drive along: top 3 plus your best with this car (default), number 1 only,
   your best only, the whole top 10, or none. Ghost labels are in each player's
   colour. Every track card shows the current top 3 (player, car and result).
@@ -42,7 +63,12 @@ Delete that folder to start over. To use a different save folder, set the
   where it is currently 1st, 2nd or 3rd in the hall of fame, so it can lose
   them. Medals with counts show on garage cards and in the car pickers, and
   the car's detail panel lists which track each trophy is for.
-  The Hall of fame tab lists all tracks. Hotseat races do not count.
+- **Points**: on every track a car scores one point for each hall of fame place
+  below its own (5th of 6 places = 1 point). The total shows in a star on the
+  car's icon in the garage, the car pickers and the detail panel (no star at 0
+  points); hover it for the points per track. Like trophies, only visible tracks count.
+  The Hall of fame tab lists the top 10 of every track, plus your own places
+  further down; "Show all" opens the whole list. Hotseat races do not count.
 - Controls: arrow keys; Space to start or continue; M to toggle sound; Esc to
   give up a run. Steering in reverse works like a real car: Right while
   reversing swings the tail right and the nose left.
@@ -96,6 +122,17 @@ The engine roars while you press the gas, and the car gulps while it drinks at
 the pumps. Children inherit their parents' sounds like any other trait. Use the
 "Hear engine" and "Hear refuelling" buttons in the garage to listen.
 
+### Driving physics
+
+- **Drifting**: tyres grip until the car slides sideways too fast for them,
+  then they break loose and slide on lower grip until the slide calms down,
+  so drifts last. Gas during a drift swings the tail further out (power
+  oversteer); lifting off lets the tyres catch again. Low tyre grip, rain and
+  snow make cars drift much more readily. Drifts and locked wheels leave skid
+  marks and make the tyres squeal.
+- **Walls**: cars bounce off walls, and a hit swings the car towards running
+  along the wall. Every hit thumps, and hard hits cost durability.
+
 A run ends at the finish, when the car is out of fuel and
 standing still, when it is wrecked (durability 0), when it reaches its lifetime
 kilometres, after 40 s without progress, or on Esc.
@@ -132,6 +169,7 @@ dominance wins), `avg` (additive), `low` (the weaker allele wins), `high`
 - `genome.py`: diploid genome, expression modes, crossover and mutation
 - `traits.py`: gene map and genotype-to-phenotype decoding
 - `garage.py`: JSON persistence for cars, odometers and records
-- `server.py`: HTTP server and JSON API
+- `accounts.py`: logins, passwords and sessions
+- `server.py`: HTTP server, JSON API and permission checks
 - `static/`: front end (`app.js` menus, `race.js` physics and rendering, `sound.js` genetic sounds,
   `tracks.js` seeded tracks, `carart.js` car drawing)

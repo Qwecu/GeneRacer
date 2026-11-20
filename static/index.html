@@ -17,15 +17,50 @@
     </nav>
     <div class="profile-bar">
       <span class="swatch" id="profile-swatch"></span>
-      <label for="profile-select">Player</label>
-      <select id="profile-select"></select>
-      <button class="small" id="btn-profile-new">New player</button>
+      <span id="profile-label"></span>
+      <select id="profile-select" class="admin-only"></select>
+      <button class="small admin-only" id="btn-profile-new">New player</button>
       <button class="small" id="btn-profile-rename">Rename</button>
+      <button class="small" id="btn-profile-password">Password</button>
       <button class="small" id="btn-profile-delete">Delete</button>
+      <button class="small admin-only" id="btn-admin-password">Admin password</button>
+      <button class="small" id="btn-logout">Log out</button>
     </div>
   </header>
 
+  <!-- LOGIN / REGISTRATION -->
+  <section id="login-screen" class="hidden">
+    <div class="login-boxes">
+      <form id="login-form" class="login-box">
+        <h2>Log in</h2>
+        <label>Username <input name="name" autocomplete="username"></label>
+        <label>Password <input name="password" type="password" autocomplete="current-password"></label>
+        <button class="primary">Log in</button>
+        <p class="form-error"></p>
+      </form>
+      <form id="register-form" class="login-box">
+        <h2>New player</h2>
+        <p class="hint">Pick any username and password. You get your own garage with six random cars.</p>
+        <label>Username <input name="name" autocomplete="off"></label>
+        <label>Password <input name="password" type="password" autocomplete="new-password"></label>
+        <button class="primary">Register</button>
+        <p class="form-error"></p>
+      </form>
+    </div>
+  </section>
+
+  <!-- small form dialog (passwords, new players) -->
+  <dialog id="form-dialog">
+    <form method="dialog">
+      <h3 class="fd-title"></h3>
+      <div class="fd-fields"></div>
+      <p class="form-error"></p>
+      <div class="toolbar"><button value="cancel" formnovalidate>Cancel</button><button class="primary" value="ok">OK</button></div>
+    </form>
+  </dialog>
+
   <main>
+    <p id="no-player" class="hint hidden">There are no players yet. Create one with "New player".</p>
     <!-- GARAGE -->
     <section id="tab-garage" class="tab active">
       <h2 id="garage-title">Garage</h2>
@@ -43,7 +78,7 @@
     <!-- HOTSEAT RACE SETUP -->
     <section id="tab-race" class="tab">
       <h2>Hotseat race</h2>
-      <p class="hint">Each player picks one of their own cars. Players drive one after another on the same keyboard. Finishers rank by time; everyone else by how far they got. Earlier runs appear as ghosts.</p>
+      <p class="hint">Each player picks one of their own cars. Other players join with their own password. Players drive one after another on the same keyboard. Finishers rank by time; everyone else by how far they got. Earlier runs appear as ghosts.</p>
       <h3>Players</h3>
       <div id="player-list"></div>
       <div class="toolbar">
@@ -80,7 +115,7 @@
     <!-- RECORDS -->
     <section id="tab-records" class="tab">
       <h2>Hall of fame</h2>
-      <p class="hint">The ten best time-trial runs on each track, shared by all players. Each player and car can hold one place; a new run replaces it only if it is better. Finishers rank by time, everyone else by distance.</p>
+      <p class="hint">The 100 best time-trial runs on each track, shared by all players. The top 10 keep their ghosts. Each player and car can hold one place; a new run replaces it only if it is better. Finishers rank by time, everyone else by distance.</p>
       <div id="records-table"></div>
     </section>
   </main>

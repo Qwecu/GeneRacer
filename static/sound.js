@@ -41,6 +41,17 @@ const Sound = {
 };
 Sound.init();
 
+// One second of white noise, shared by all sounds that need it.
+let _noise = null;
+function noiseBuffer(ctx) {
+  if (!_noise || _noise.sampleRate !== ctx.sampleRate) {
+    _noise = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate);
+    const d = _noise.getChannelData(0);
+    for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+  }
+  return _noise;
+}
+
 function timbreWave(t) { return t < 0.33 ? 'triangle' : t < 0.66 ? 'sawtooth' : 'square'; }
 
 class CarSound {
@@ -83,8 +94,22 @@ class CarSound {
     this.lfoDepth.gain.value = 0.45 * (1 - (s.cylinders - 2) / 12);
     this.lfo.connect(this.lfoDepth).connect(this.pulse.gain);
 
+    // Tyre squeal: looped noise through a band-pass filter, louder the harder the slide.
+    this.skidGain = ctx.createGain();
+    this.skidGain.gain.value = 0;
+    this.skidGain.connect(Sound.master);
+    const skidFilter = ctx.createBiquadFilter();
+    skidFilter.type = 'bandpass';
+    skidFilter.frequency.value = 1400 + 900 * s.timbre;
+    skidFilter.Q.value = 6;
+    skidFilter.connect(this.skidGain);
+    this.noise = ctx.createBufferSource();
+    this.noise.buffer = noiseBuffer(ctx);
+    this.noise.loop = true;
+    this.noise.connect(skidFilter);
+
     this.setPitch(0, 0);
-    this.osc.start(); this.sub.start(); this.lfo.start();
+    this.osc.start(); this.sub.start(); this.lfo.start(); this.noise.start();
   }
 
   setPitch(speedFrac, throttle) {
@@ -99,9 +124,10 @@ class CarSound {
   }
 
   // throttle: 0/1 gas pedal, running: engine has fuel, refueling: drinking at the pumps
-  update(speedFrac, throttle, running, refueling) {
+  update(speedFrac, throttle, running, refueling, slide = 0) {
     if (!this.ctx) return;
     const t = this.ctx.currentTime;
+    this.skidGain.gain.setTargetAtTime(0.18 * slide, t, 0.05);
     this.setPitch(speedFrac, throttle);
     const vol = !running ? 0 : throttle ? 0.22 : 0.06;
     this.out.gain.setTargetAtTime(vol, t, throttle ? 0.04 : 0.15);
@@ -129,11 +155,30 @@ class CarSound {
     o.stop(t + dur + 0.02);
   }
 
+  // A short low thud when the car hits a wall; intensity 0..1.
+  thump(intensity) {
+    if (!this.ctx) return;
+    const ctx = this.ctx, t = ctx.currentTime;
+    const src = ctx.createBufferSource();
+    src.buffer = noiseBuffer(ctx);
+    const f = ctx.createBiquadFilter();
+    f.type = 'lowpass';
+    f.frequency.value = 180 + 300 * intensity;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.25 + 0.6 * intensity, t + 0.01);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.18 + 0.2 * intensity);
+    src.connect(f).connect(g).connect(Sound.master);
+    src.start(t);
+    src.stop(t + 0.45);
+  }
+
   stop() {
     if (!this.ctx) return;
     const t = this.ctx.currentTime;
     this.out.gain.setTargetAtTime(0, t, 0.05);
-    for (const o of [this.osc, this.sub, this.lfo]) o.stop(t + 0.3);
+    this.skidGain.gain.setTargetAtTime(0, t, 0.05);
+    for (const o of [this.osc, this.sub, this.lfo, this.noise]) o.stop(t + 0.3);
     this.ctx = null;
   }
 }

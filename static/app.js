@@ -14,26 +14,125 @@ const state = {
   profiles: [],
   profileId: (() => { try { return localStorage.getItem('generacer-profile'); } catch (e) { return null; } })(),
   players: [{ profileId: null, carId: null }, { profileId: null, carId: null }],
+  session: null,      // {admin, profile_id, name} of the logged-in account
+  joined: {},         // profile id -> session token of players who joined a hotseat race
+  hallOpen: new Set(),  // record keys whose full 100-place list is shown
 };
 
+function storedToken() { try { return localStorage.getItem('generacer-session') || ''; } catch (e) { return ''; } }
+function storeToken(t) { try { t ? localStorage.setItem('generacer-session', t) : localStorage.removeItem('generacer-session'); } catch (e) { /* storage blocked */ } }
+
 async function api(path, body) {
-  const opts = body === undefined ? {} : {
-    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
-  };
+  const opts = { headers: { 'X-Session': storedToken() } };
+  if (body !== undefined) {
+    opts.method = 'POST';
+    opts.headers['Content-Type'] = 'application/json';
+    opts.body = JSON.stringify(body);
+  }
   const res = await fetch(path, opts);
   const data = await res.json();
+  if (res.status === 401 && path !== '/api/login') { showLogin(); throw new Error(data.error); }
   if (!res.ok) throw new Error(data.error || res.statusText);
   return data;
 }
+
+// =====================================================================
+// Login and registration
+// =====================================================================
+
+function showLogin() {
+  storeToken('');
+  state.session = null;
+  state.joined = {};
+  document.body.classList.add('logged-out');
+  document.body.classList.remove('is-admin');
+  document.getElementById('login-screen').classList.remove('hidden');
+}
+
+async function startSession() {
+  const me = await api('/api/me');
+  if (!me) return showLogin();
+  state.session = me;
+  document.body.classList.remove('logged-out');
+  document.body.classList.toggle('is-admin', me.admin);
+  document.getElementById('login-screen').classList.add('hidden');
+  if (!me.admin) setProfile(me.profile_id);
+  state.players = [{ profileId: null, carId: null }, { profileId: null, carId: null }];
+  resetPlayerView();
+  await loadAll();
+}
+
+function bindAuthForm(id, path) {
+  const form = document.getElementById(id);
+  form.onsubmit = async (ev) => {
+    ev.preventDefault();
+    const err = form.querySelector('.form-error');
+    err.textContent = '';
+    const name = form.elements.name.value, password = form.elements.password.value;
+    if (name === '' || password === '') { err.textContent = 'Type a username and a password.'; return; }
+    try {
+      const res = await api(path, { name, password });
+      storeToken(res.token);
+      form.reset();
+      await startSession();
+    } catch (e) { err.textContent = e.message; }
+  };
+}
+bindAuthForm('login-form', '/api/login');
+bindAuthForm('register-form', '/api/register');
+
+document.getElementById('btn-logout').onclick = async () => {
+  try { await api('/api/logout', { tokens: Object.values(state.joined) }); } catch (e) { /* already logged out */ }
+  showLogin();
+};
+
+// A small modal form.  fields: [{name, label, type}]; resolves to {name: value} or null.
+function askForm(title, fields) {
+  const dlg = document.getElementById('form-dialog');
+  dlg.querySelector('.fd-title').textContent = title;
+  const box = dlg.querySelector('.fd-fields');
+  box.innerHTML = '';
+  for (const f of fields) {
+    const label = document.createElement('label');
+    label.textContent = f.label + ' ';
+    const input = document.createElement('input');
+    input.name = f.name; input.type = f.type || 'text'; input.value = f.value || '';
+    input.autocomplete = f.type === 'password' ? 'new-password' : 'off';
+    label.appendChild(input);
+    box.appendChild(label);
+  }
+  const err = dlg.querySelector('.form-error');
+  err.textContent = '';
+  return new Promise(resolve => {
+    const form = dlg.querySelector('form');
+    form.onsubmit = (ev) => {
+      if (ev.submitter && ev.submitter.value === 'cancel') return;
+      const values = Object.fromEntries(fields.map(f => [f.name, form.elements[f.name].value]));
+      if (fields.some(f => values[f.name] === '')) { ev.preventDefault(); err.textContent = 'Fields cannot be empty.'; }
+      else form.dataset.values = JSON.stringify(values);
+    };
+    form.dataset.values = '';
+    dlg.returnValue = '';
+    dlg.onclose = () => resolve(dlg.returnValue === 'ok' && form.dataset.values ? JSON.parse(form.dataset.values) : null);
+    dlg.showModal();
+  });
+}
+
+// =====================================================================
+// Loading
+// =====================================================================
 
 async function loadAll() {
   const g = await api('/api/garage');
   state.cars = g.cars;
   state.profiles = await api('/api/profiles');
-  if (!profileById(state.profileId)) setProfile(state.profiles[0].id);
-  // hotseat rows: default to different players, in order
+  if (!profileById(state.profileId)) setProfile(state.profiles[0]?.id || null);
+  // hotseat rows: the first is the current player, the others different players in order
   state.players.forEach((p, i) => {
-    if (!profileById(p.profileId)) p.profileId = state.profiles[i % state.profiles.length].id;
+    if (profileById(p.profileId)) return;
+    const used = state.players.map(q => q.profileId);
+    p.profileId = i === 0 ? state.profileId
+      : (state.profiles.find(q => !used.includes(q.id)) || state.profiles[0])?.id || null;
   });
   state.traitInfo = g.trait_info;
   state.records = await api('/api/records');
@@ -56,8 +155,19 @@ function setProfile(id) {
   try { localStorage.setItem('generacer-profile', id); } catch (e) { /* storage blocked */ }
 }
 
+// Players this browser may drive for: yourself, players who joined with
+// their password, and everyone for the admin.
+function unlocked(profileId) {
+  return state.session.admin || profileId === state.session.profile_id || !!state.joined[profileId];
+}
+
 function renderAll() {
   renderProfileBar();
+  const noPlayer = !me();
+  document.getElementById('no-player').classList.toggle('hidden', !noPlayer);
+  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('blocked', noPlayer));
+  if (noPlayer) return;
+  computePoints();
   renderGarage();
   renderRaceSetup();
   renderTrialSetup();
@@ -82,11 +192,15 @@ if (document.getElementById('tab-' + location.hash.slice(1))) showTab(location.h
 // =====================================================================
 
 function renderProfileBar() {
+  const admin = state.session.admin;
   const sel = document.getElementById('profile-select');
   sel.innerHTML = state.profiles.map(p =>
-    `<option value="${p.id}" ${p.id === state.profileId ? 'selected' : ''}>${esc(p.name)} (${p.cars} cars)</option>`).join('');
+    `<option value="${p.id}" ${p.id === state.profileId ? 'selected' : ''}>${esc(p.name)} (${p.cars} cars${p.has_password ? '' : ', no password'})</option>`).join('');
+  document.getElementById('profile-label').textContent = admin ? 'Admin, acting as' : me()?.name || '';
   document.getElementById('profile-swatch').style.background = me()?.color || '#888';
-  document.getElementById('btn-profile-delete').disabled = state.profiles.length <= 1;
+  for (const id of ['btn-profile-rename', 'btn-profile-password', 'btn-profile-delete']) {
+    document.getElementById(id).disabled = !me();
+  }
 }
 
 function resetPlayerView() {
@@ -102,10 +216,10 @@ document.getElementById('profile-select').onchange = (ev) => {
 };
 
 document.getElementById('btn-profile-new').onclick = async () => {
-  const name = prompt('Name of the new player:');
-  if (!name || !name.trim()) return;
+  const v = await askForm('New player', [{ name: 'name', label: 'Username' }, { name: 'password', label: 'Password', type: 'password' }]);
+  if (!v) return;
   try {
-    const p = await api('/api/profiles/create', { name });
+    const p = await api('/api/profiles/create', v);
     setProfile(p.id);
     resetPlayerView();
     await loadAll();
@@ -113,16 +227,31 @@ document.getElementById('btn-profile-new').onclick = async () => {
 };
 
 document.getElementById('btn-profile-rename').onclick = async () => {
-  const name = prompt('New name:', me().name);
-  if (!name || !name.trim()) return;
-  try { await api('/api/profiles/rename', { id: state.profileId, name }); await loadAll(); } catch (e) { alert(e.message); }
+  const v = await askForm(`Rename ${me().name}`, [{ name: 'name', label: 'New username', value: me().name }]);
+  if (!v) return;
+  try { await api('/api/profiles/rename', { id: state.profileId, name: v.name }); await loadAll(); } catch (e) { alert(e.message); }
+};
+
+document.getElementById('btn-profile-password').onclick = async () => {
+  const v = await askForm(`New password for ${me().name}`, [{ name: 'password', label: 'Password', type: 'password' }]);
+  if (!v) return;
+  try { await api('/api/profiles/password', { id: state.profileId, password: v.password }); await loadAll(); alert('Password changed.'); }
+  catch (e) { alert(e.message); }
+};
+
+document.getElementById('btn-admin-password').onclick = async () => {
+  const v = await askForm('New admin password', [{ name: 'password', label: 'Password', type: 'password' }]);
+  if (!v) return;
+  try { await api('/api/admin/password', { password: v.password }); alert('Admin password changed.'); } catch (e) { alert(e.message); }
 };
 
 document.getElementById('btn-profile-delete').onclick = async () => {
   const p = me();
-  if (!confirm(`Delete player ${p.name} and all ${p.cars} of their cars? This cannot be undone.`)) return;
+  const whose = state.session.admin ? `player ${p.name}` : 'your account';
+  if (!confirm(`Delete ${whose} and all ${p.cars} cars? This cannot be undone.`)) return;
   try {
     await api('/api/profiles/delete', { id: p.id });
+    if (!state.session.admin) return showLogin();
     state.profileId = null;
     resetPlayerView();
     await loadAll();
@@ -150,7 +279,11 @@ function renderGarage() {
     pick.title = 'Select for breeding';
     pick.onclick = (ev) => { ev.stopPropagation(); toggleBreedPick(car.id); };
     card.appendChild(pick);
-    card.appendChild(carThumbnail(car.looks));
+    const thumb = document.createElement('div');
+    thumb.className = 'icon-wrap';
+    thumb.appendChild(carThumbnail(car.looks));
+    thumb.insertAdjacentHTML('beforeend', starHTML(car));
+    card.appendChild(thumb);
     card.insertAdjacentHTML('beforeend', `<div class="card-trophies">${trophyBadges(car)}</div>`);
     const lifeLeft = Math.max(0, 1 - car.odometer_km / car.stats.lifespan_km);
     card.insertAdjacentHTML('beforeend', `
@@ -223,7 +356,10 @@ function renderDetail() {
     <h3>Genotype</h3>
     <div class="hint">Two alleles per gene: value and dominance (d). Highlighted = expressed allele. "avg" genes blend both.</div>
     <table class="genes"><tr><th>#</th><th>Gene</th><th>Allele 1</th><th>Allele 2</th><th>Shown</th></tr>${geneRows}</table>`;
-  el.querySelector('#detail-thumb').appendChild(carThumbnail(car.looks, 300, 170, 3.6));
+  const detailThumb = el.querySelector('#detail-thumb');
+  detailThumb.className = 'icon-wrap big';
+  detailThumb.appendChild(carThumbnail(car.looks, 300, 170, 3.6));
+  detailThumb.insertAdjacentHTML('beforeend', starHTML(car));
   el.querySelector('#btn-hear-engine').onclick = () => previewEngine(car.sound);
   el.querySelector('#btn-hear-gulp').onclick = () => previewGulp(car.sound);
   el.querySelector('#btn-rename').onclick = async () => {
@@ -354,12 +490,13 @@ function renderTrackList(containerId, which, selectedId, onPick) {
         onPick(def.id);
       });
     } else if (def.custom) {
-      button('Delete', async () => {
+      // custom tracks: the player who saved it, or the admin
+      if (state.session.admin || def.owner === state.session.profile_id) button('Delete', async () => {
         if (!confirm(`Delete "${def.name}" and its record?`)) return;
         await api('/api/tracks/delete', { id: def.id, builtin: false });
         loadAll();
       });
-    } else {
+    } else if (state.session.admin) {
       button('Delete', async () => {
         if (!confirm(`Remove the built-in track "${def.name}"? You can restore built-in tracks later.`)) return;
         await api('/api/tracks/delete', { id: def.id, builtin: true });
@@ -371,7 +508,7 @@ function renderTrackList(containerId, which, selectedId, onPick) {
     list.appendChild(card);
   }
 
-  if (state.tracks.hidden.length) {
+  if (state.tracks.hidden.length && state.session.admin) {
     const restore = document.createElement('button');
     restore.className = 'small restore-tracks';
     restore.textContent = `Restore ${state.tracks.hidden.length} removed built-in track${state.tracks.hidden.length > 1 ? 's' : ''}`;
@@ -385,7 +522,7 @@ function renderTrackList(containerId, which, selectedId, onPick) {
 // =====================================================================
 
 function carLabelHTML(car) {
-  return `<img class="car-icon" src="${carIconURL(car.looks)}" alt="">
+  return `<span class="icon-wrap small"><img class="car-icon" src="${carIconURL(car.looks)}" alt="">${starHTML(car)}</span>
     <span class="cp-text"><span><b>${esc(car.name)}</b> ${trophyBadges(car)}</span>
     <span class="cp-meta">gen ${car.generation} &middot; ${car.stats.power} kW &middot; ${car.stats.max_speed} km/h &middot;
       ${Math.max(0, car.stats.lifespan_km - car.odometer_km).toFixed(1)} km left</span></span>`;
@@ -442,7 +579,26 @@ function renderRaceSetup() {
       <select class="player-select">${state.profiles.map(q =>
         `<option value="${q.id}" ${q.id === p.profileId ? 'selected' : ''}>${esc(q.name)}</option>`).join('')}</select>`;
     row.querySelector('select').onchange = (ev) => { p.profileId = ev.target.value; p.carId = null; renderRaceSetup(); };
-    row.appendChild(carPicker(p.carId, id => { p.carId = id; renderRaceSetup(); }, cars));
+    if (unlocked(p.profileId)) {
+      row.appendChild(carPicker(p.carId, id => { p.carId = id; renderRaceSetup(); }, cars));
+    } else {
+      // another player joins by typing their own password
+      const join = document.createElement('form');
+      join.className = 'join-form';
+      join.innerHTML = `<input type="password" placeholder="${esc(prof.name)}'s password" autocomplete="off">
+        <button class="small primary">Join</button><span class="form-error"></span>`;
+      join.onsubmit = async (ev) => {
+        ev.preventDefault();
+        const password = join.querySelector('input').value;
+        if (password === '') return;
+        try {
+          const res = await api('/api/login', { name: prof.name, password, join: true });
+          state.joined[p.profileId] = res.token;
+          renderRaceSetup();
+        } catch (e) { join.querySelector('.form-error').textContent = e.message; }
+      };
+      row.appendChild(join);
+    }
     if (state.players.length > 1) {
       const rm = document.createElement('button');
       rm.className = 'small'; rm.textContent = 'Remove';
@@ -466,6 +622,8 @@ document.getElementById('btn-start-race').onclick = () => {
     const prof = profileById(p.profileId);
     return { driver: prof.name, color: prof.color, car: carById(p.carId) };
   });
+  const locked = state.players.find(p => !unlocked(p.profileId));
+  if (locked) return alert(`${profileById(locked.profileId).name} has to join with their password first.`);
   const missing = entries.find(e => !e.car);
   if (missing) return alert(`${missing.driver} has no car that can race. Generate or breed one in their garage.`);
   const def = findDef(state.raceTrack);
@@ -510,9 +668,10 @@ document.getElementById('btn-start-trial').onclick = async () => {
         },
       });
       if (res.rank === 1) return '<p class="big"><b>New number 1 on this track!</b></p>';
-      if (res.rank) return `<p class="big"><b>Hall of fame: place ${res.rank}</b></p>`;
+      if (res.rank) return `<p class="big"><b>Hall of fame: place ${res.rank}</b></p>` +
+        (res.rank > 10 ? '<p class="hint">Only the top 10 keep a ghost.</p>' : '');
       if (res.best_rank) return `<p>Not better than ${esc(car.name)}'s earlier run, which stays at place ${res.best_rank}.</p>`;
-      return '<p>Not in the top ten this time.</p>';
+      return '<p>Not in the top 100 this time.</p>';
     },
     onExit: afterRace,
   }).start();
@@ -525,7 +684,7 @@ function pickGhosts(hall, player, car) {
   const mineIdx = hall.findIndex(e => e.profile_id === player.id && e.car_id === car.id);
   let idx = [];
   if (mode === 'first') idx = [0];
-  else if (mode === 'top10') idx = hall.map((_, i) => i);
+  else if (mode === 'top10') idx = hall.slice(0, 10).map((_, i) => i);
   else if (mode === 'top3') idx = [0, 1, 2];
   if ((mode === 'top3' || mode === 'mine') && mineIdx >= 0 && !idx.includes(mineIdx)) idx.push(mineIdx);
   return idx.filter(i => i < hall.length && hall[i].ghost).map(i => {
@@ -550,7 +709,7 @@ ghostSelect.onchange = () => {
 // Odometers advance by the distance each car actually drove.
 async function afterRace(results) {
   const entries = results.map(r => ({ id: r.car.id, km: r.km }));
-  if (entries.length) await api('/api/drive', { entries });
+  if (entries.length) await api('/api/drive', { entries, tokens: Object.values(state.joined) });
   await loadAll();
 }
 
@@ -590,6 +749,40 @@ function trophyListHTML(car) {
   return rows.length ? `<div class="trophy-list">${rows.join('')}</div>` : '';
 }
 
+// =====================================================================
+// Points: on every visible track a car scores one point for each hall of
+// fame place below its own, e.g. 5th of 6 places = 1 point.
+// =====================================================================
+
+function computePoints() {
+  const pts = new Map();     // car id -> {total, parts: [[track name, points]]}
+  for (const def of visibleTracks()) {
+    const hall = hallOf(def);
+    hall.forEach((e, i) => {
+      const p = hall.length - (i + 1);
+      if (!pts.has(e.car_id)) pts.set(e.car_id, { total: 0, parts: [] });
+      const c = pts.get(e.car_id);
+      c.total += p;
+      c.parts.push([def.name, p]);
+    });
+  }
+  state.points = pts;
+}
+
+function pointsOf(car) { return (state.points && state.points.get(car.id)) || { total: 0, parts: [] }; }
+
+function starHTML(car) {
+  const p = pointsOf(car);
+  if (!p.total) return '';
+  const title = `${p.total} point${p.total === 1 ? '' : 's'}` +
+    (p.parts.length ? ': ' + p.parts.map(([n, v]) => `${n} ${v}`).join(', ') : ' (no hall of fame places yet)');
+  const digits = String(p.total).length;
+  const size = digits <= 1 ? 10 : digits === 2 ? 9 : digits === 3 ? 7 : 5.5;
+  return `<span class="star" title="${esc(title)}"><svg viewBox="0 0 24 24" aria-hidden="true">
+    <path d="M12 1.2l3.1 6.9 7.5.8-5.6 5.1 1.6 7.4L12 17.6l-6.6 3.8 1.6-7.4-5.6-5.1 7.5-.8z"/>
+    <text x="12" y="15.6" text-anchor="middle" font-size="${size}">${p.total}</text></svg></span>`;
+}
+
 // Entries remember the player's id, so renamed players show their new name;
 // runs by deleted players keep the name they had.
 function holderName(e) { return profileById(e.profile_id)?.name || e.driver; }
@@ -600,8 +793,13 @@ function holderHTML(e) {
 
 function renderRecords() {
   const blocks = visibleTracks().map(def => {
+    const key = recordKey(def);
     const hall = hallOf(def);
-    const rows = hall.map((e, i) => `
+    const open = state.hallOpen.has(key);
+    // top 10, plus the current player's own places further down
+    const shown = hall.map((e, i) => [e, i]).filter(([e, i]) => open || i < 10 || e.profile_id === state.profileId);
+    const rows = shown.map(([e, i], n) => `
+      ${n > 0 && shown[n - 1][1] !== i - 1 ? '<tr class="gap"><td colspan="5">&hellip;</td></tr>' : ''}
       <tr class="${e.profile_id === state.profileId ? 'mine' : ''}">
         <td class="rank">${i === 0 ? '<span class="crown">#1</span>' : i + 1}</td>
         <td>${holderHTML(e)}</td>
@@ -611,9 +809,16 @@ function renderRecords() {
     return `<div class="hall-track">
       <h3>${esc(def.name)}</h3><div class="hint">${trackConditions(def)}</div>
       ${hall.length ? `<table class="records">${rows}</table>` : '<p class="hint">No runs yet.</p>'}
+      ${hall.length > 10 ? `<button class="small hall-toggle" data-key="${esc(key)}">${open ? 'Show top 10' : `Show all ${hall.length}`}</button>` : ''}
     </div>`;
   }).join('');
-  document.getElementById('records-table').innerHTML = `<div class="hall">${blocks}</div>`;
+  const el = document.getElementById('records-table');
+  el.innerHTML = `<div class="hall">${blocks}</div>`;
+  el.querySelectorAll('.hall-toggle').forEach(b => b.onclick = () => {
+    const k = b.dataset.key;
+    if (state.hallOpen.has(k)) state.hallOpen.delete(k); else state.hallOpen.add(k);
+    renderRecords();
+  });
 }
 
-loadAll();
+startSession();

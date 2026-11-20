@@ -21,7 +21,8 @@ TRACKS_FILE = os.path.join(DATA_DIR, "tracks.json")
 PROFILES_FILE = os.path.join(DATA_DIR, "profiles.json")
 
 STARTER_CARS = 6
-HALL_SIZE = 10     # places in each track's time-trial hall of fame
+HALL_SIZE = 100    # places saved in each track's time-trial hall of fame
+GHOST_PLACES = 10  # only the top places keep their ghost (they are large)
 PROFILE_COLORS = ["#e74c3c", "#3498db", "#2ecc71", "#f1c40f", "#9b59b6", "#e67e22",
                   "#1abc9c", "#e84393", "#34495e", "#a0522d"]
 
@@ -117,20 +118,13 @@ class Garage:
         # before the hall of fame held a single record per track.
         self.records = {k: (v if isinstance(v, list) else [v])
                         for k, v in _load(RECORDS_FILE, {}).items()}
-        # Every hall of fame entry keeps its ghost.  Entries saved without one
-        # (older versions kept only the number 1's ghost) are dropped.
-        cleaned = {k: [e for e in v if e.get("ghost")] for k, v in self.records.items()}
-        cleaned = {k: v for k, v in cleaned.items() if v}
-        if cleaned != self.records:
-            self.records = cleaned
-            _save(RECORDS_FILE, self.records)
-        # custom: saved seed-generated track definitions; hidden: ids of built-in tracks the player deleted
+        # custom: saved seed-generated track definitions; hidden: ids of built-in tracks the admin removed
         self.tracks = _load(TRACKS_FILE, {"custom": [], "hidden": []})
         self.profiles = _load(PROFILES_FILE, [])
-        if not self.profiles:
-            # First run, or data from before profiles existed: everything
-            # already in the garage belongs to the first player.
-            first = self._new_profile("Player 1", starters=not self.cars)
+        if not self.profiles and self.cars:
+            # Data from before profiles existed: everything already in the
+            # garage belongs to the first player.
+            first = self._new_profile("Player 1", starters=False)
             for c in self.cars:
                 c.setdefault("owner", first["id"])
             self._persist()
@@ -163,12 +157,20 @@ class Garage:
                 return p
         raise KeyError(f"No player {profile_id}")
 
-    @staticmethod
-    def _clean_name(name):
-        name = str(name).strip()[:30]
-        if not name:
-            raise ValueError("Empty name")
+    def _check_username(self, name, profile_id=None):
+        """A player name is also the login name: anything but empty, taken or "admin"."""
+        if not isinstance(name, str) or name == "":
+            raise ValueError("The username cannot be empty")
+        if len(name) > 200:
+            raise ValueError("The username is too long")
+        if name == "admin":
+            raise ValueError("The name admin is reserved")
+        if any(p["name"] == name and p["id"] != profile_id for p in self.profiles):
+            raise ValueError(f"The name {name} is already taken")
         return name
+
+    def owner_of(self, car_id):
+        return self._find(car_id).get("owner")
 
     def _add(self, genome, generation, parents, owner):
         car = {
@@ -218,18 +220,17 @@ class Garage:
         return [{**p, "cars": counts.get(p["id"], 0)} for p in self.profiles]
 
     def create_profile(self, name):
-        name = self._clean_name(name)
         with _lock:
-            if any(p["name"].lower() == name.lower() for p in self.profiles):
-                raise ValueError(f"A player called {name} already exists")
+            self._check_username(name)
             profile = self._new_profile(name, starters=True)
             self._persist()
             _save(PROFILES_FILE, self.profiles)
             return profile
 
     def rename_profile(self, profile_id, name):
-        name = self._clean_name(name)
         with _lock:
+            self._profile(profile_id)
+            self._check_username(name, profile_id)
             self._profile(profile_id)["name"] = name
             _save(PROFILES_FILE, self.profiles)
 
@@ -237,8 +238,6 @@ class Garage:
         """Removes the player and all their cars.  Records they set stay."""
         with _lock:
             self._profile(profile_id)
-            if len(self.profiles) <= 1:
-                raise ValueError("Cannot delete the only player")
             self.profiles = [p for p in self.profiles if p["id"] != profile_id]
             self.cars = [c for c in self.cars if c.get("owner") != profile_id]
             self._persist()
@@ -323,7 +322,8 @@ class Garage:
         """
         Offer a time-trial run to the track's shared hall of fame (top
         HALL_SIZE).  Each player+car pair holds at most one place, replaced
-        only when beaten.  Every entry keeps its ghost.
+        only when beaten.  The top GHOST_PLACES entries keep their ghost;
+        an entry that drops below them loses it.
 
         Returns {"rank": n or None, "best_rank": rank of this player+car's
         entry after the update, or None}.
@@ -353,6 +353,8 @@ class Garage:
             hall = hall[:HALL_SIZE]
             if not any(e is rec for e in hall):
                 return {"rank": None, "best_rank": None}
+            for e in hall[GHOST_PLACES:]:
+                e.pop("ghost", None)
             self.records[track_id] = hall
             _save(RECORDS_FILE, self.records)
             rank = next(i for i, e in enumerate(hall) if e is rec) + 1
@@ -360,13 +362,20 @@ class Garage:
 
     # ---------------- tracks ----------------
 
-    def save_track(self, definition):
+    def track_owner(self, track_id):
+        """The profile id that saved a custom track, or None (built-in, or saved before logins)."""
+        return next((t.get("owner") for t in self.tracks["custom"] if t["id"] == track_id), None)
+
+    def save_track(self, definition, owner):
         """Store a seed-generated track definition (built by the front end)."""
         if not isinstance(definition, dict) or not isinstance(definition.get("id"), str):
             raise ValueError("Bad track definition")
         if len(json.dumps(definition)) > 4000:
             raise ValueError("Track definition too large")
         with _lock:
+            old = next((t for t in self.tracks["custom"] if t["id"] == definition["id"]), None)
+            # saving the same seed again keeps the first saver as the owner
+            definition = {**definition, "owner": old.get("owner") if old else owner}
             self.tracks["custom"] = [t for t in self.tracks["custom"] if t["id"] != definition["id"]]
             self.tracks["custom"].append(definition)
             if definition["id"] in self.tracks["hidden"]:

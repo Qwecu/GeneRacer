@@ -213,3 +213,36 @@ header { flex-wrap: wrap; }
 .card-trophies { position: absolute; top: 8px; right: 8px; }
 .trophy-list { margin: 4px 0 10px; font-size: 0.85rem; }
 .trophy-row { margin: 2px 0; }
+
+/* ---------- login ---------- */
+body.logged-out nav, body.logged-out .profile-bar, body.logged-out main { display: none; }
+body:not(.is-admin) .admin-only { display: none; }
+#login-screen.hidden { display: none; }
+.login-boxes { display: flex; flex-wrap: wrap; gap: 20px; justify-content: center; padding: 40px 16px; }
+.login-box { background: var(--panel); border-radius: 10px; padding: 18px 22px; width: 300px; max-width: 100%;
+  box-shadow: 0 1px 5px rgba(0,0,0,0.08); display: flex; flex-direction: column; gap: 10px; }
+.login-box h2 { margin: 0; }
+.login-box label, #form-dialog label { display: flex; flex-direction: column; gap: 4px; font-size: 0.9rem; color: var(--muted); }
+.form-error { color: var(--bad); font-size: 0.85rem; margin: 0; min-height: 1em; }
+#form-dialog { border: none; border-radius: 10px; padding: 18px 22px; width: 320px; max-width: calc(100vw - 32px); }
+#form-dialog h3 { color: var(--text); text-transform: none; letter-spacing: 0; font-size: 1rem; margin-top: 0; }
+#form-dialog .fd-fields { display: flex; flex-direction: column; gap: 10px; }
+#form-dialog .toolbar { justify-content: flex-end; margin-bottom: 0; }
+#profile-label { color: #eee; }
+#no-player.hidden { display: none; }
+.tab.blocked { display: none !important; }
+.join-form { display: flex; align-items: center; gap: 6px; }
+.join-form .form-error { min-height: 0; }
+.hall-track tr.gap td { color: var(--muted); text-align: center; padding: 0; }
+.hall-toggle { margin-top: 8px; }
+
+/* ---------- points star on car icons ---------- */
+.icon-wrap { position: relative; display: inline-block; line-height: 0; }
+.car-card .icon-wrap { display: block; width: max-content; margin: 0 auto; }
+.icon-wrap .star { position: absolute; right: -4px; bottom: -4px; width: 36px; height: 36px; }
+.icon-wrap.small .star { width: 24px; height: 24px; right: -9px; bottom: -7px; }
+.icon-wrap.big .star { width: 44px; height: 44px; right: 4px; bottom: 4px; }
+.icon-wrap.small { margin-right: 8px; vertical-align: middle; }
+.star svg { width: 100%; height: 100%; display: block; overflow: visible; }
+.star path { fill: #f5c518; stroke: #8a6a00; stroke-width: 1; stroke-linejoin: round; }
+.star text { fill: #3a2c00; font-weight: 700; font-family: inherit; }
