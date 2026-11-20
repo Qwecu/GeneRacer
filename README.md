@@ -37,7 +37,7 @@ Delete that folder to start over. To use a different save folder, set the
   run keeps its ghost; the "Ghosts" choice next to the car picker decides which
   drive along: top 3 plus your best with this car (default), number 1 only,
   your best only, the whole top 10, or none. Ghost labels are in each player's
-  colour. Every track card shows who currently holds number 1.
+  colour. Every track card shows the current top 3 (player, car and result).
 - **Trophies**: a car holds a gold, silver or bronze trophy for every track
   where it is currently 1st, 2nd or 3rd in the hall of fame, so it can lose
   them. Medals with counts show on garage cards and in the car pickers, and

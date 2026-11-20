@@ -25,12 +25,63 @@ HALL_SIZE = 10     # places in each track's time-trial hall of fame
 PROFILE_COLORS = ["#e74c3c", "#3498db", "#2ecc71", "#f1c40f", "#9b59b6", "#e67e22",
                   "#1abc9c", "#e84393", "#34495e", "#a0522d"]
 
-_ADJ = ["Rusty", "Swift", "Lucky", "Grumpy", "Silver", "Midnight", "Thunder",
-        "Little", "Mad", "Velvet", "Crimson", "Dusty", "Neon", "Iron", "Wild",
-        "Sleepy", "Turbo", "Frosty", "Golden", "Wobbly", "Shadow", "Brave"]
-_NOUN = ["Comet", "Beetle", "Hornet", "Badger", "Rocket", "Pike", "Otter",
-         "Falcon", "Lynx", "Moose", "Bolt", "Viper", "Kettle", "Biscuit",
-         "Gremlin", "Puffin", "Mantis", "Raven", "Ferret", "Wombat", "Squall"]
+_ADJ = [
+    # the originals
+    "Rusty", "Swift", "Lucky", "Grumpy", "Silver", "Midnight", "Thunder",
+    "Little", "Mad", "Velvet", "Crimson", "Dusty", "Neon", "Iron", "Wild",
+    "Sleepy", "Turbo", "Frosty", "Golden", "Wobbly", "Shadow", "Brave",
+    # mood and character
+    "Cheeky", "Jolly", "Sneaky", "Fearless", "Restless", "Cranky", "Gentle",
+    "Proud", "Shy", "Bold", "Clumsy", "Daring", "Lazy", "Nervous", "Plucky",
+    "Rowdy", "Sulky", "Wise", "Giddy", "Moody", "Noble", "Rebel", "Stubborn",
+    "Humble", "Feisty", "Dreamy", "Hasty", "Patient",
+    # speed and sound
+    "Rapid", "Blazing", "Roaring", "Howling", "Screaming", "Whispering",
+    "Rumbling", "Zippy", "Snappy", "Dashing", "Drifting", "Flying", "Hurtling",
+    "Buzzing", "Purring", "Rattling", "Sputtering", "Grinding",
+    # colour and look
+    "Scarlet", "Cobalt", "Emerald", "Amber", "Ivory", "Obsidian", "Copper",
+    "Bronze", "Chrome", "Pastel", "Ruby", "Jade", "Indigo", "Saffron",
+    "Teal", "Violet", "Smoky", "Glossy", "Speckled", "Striped", "Polished",
+    "Dented", "Patched", "Shiny",
+    # weather and nature
+    "Stormy", "Misty", "Sunny", "Windy", "Icy", "Molten", "Arctic", "Desert",
+    "Tropical", "Autumn", "Winter", "Lunar", "Solar", "Cosmic", "Northern",
+    "Wandering", "Feral", "Ancient", "Electric", "Atomic", "Mystic",
+    # size and age
+    "Tiny", "Mighty", "Chunky", "Lanky", "Pocket", "Grand", "Old", "Young",
+    "Vintage", "Retro", "Elder", "Baby",
+]
+_NOUN = [
+    # the originals
+    "Comet", "Beetle", "Hornet", "Badger", "Rocket", "Pike", "Otter",
+    "Falcon", "Lynx", "Moose", "Bolt", "Viper", "Kettle", "Biscuit",
+    "Gremlin", "Puffin", "Mantis", "Raven", "Ferret", "Wombat", "Squall",
+    # animals
+    "Hedgehog", "Weasel", "Marten", "Stoat", "Reindeer", "Elk", "Hare",
+    "Squirrel", "Beaver", "Walrus", "Seal", "Orca", "Narwhal", "Shark",
+    "Barracuda", "Salmon", "Perch", "Eel", "Gecko", "Iguana", "Cobra",
+    "Python", "Tortoise", "Toad", "Newt", "Heron", "Stork", "Crane", "Owl",
+    "Hawk", "Kestrel", "Swallow", "Magpie", "Jackdaw", "Pelican", "Penguin",
+    "Albatross", "Gull", "Wolf", "Fox", "Bear", "Panther", "Jaguar", "Cheetah",
+    "Lion", "Tiger", "Llama", "Yak", "Bison", "Rhino", "Hippo", "Gazelle",
+    "Kangaroo", "Koala", "Lemur", "Sloth", "Armadillo", "Raccoon", "Mole",
+    "Bumblebee", "Dragonfly", "Firefly", "Ladybird", "Cricket", "Wasp",
+    # weather and sky
+    "Storm", "Tornado", "Cyclone", "Blizzard", "Avalanche", "Thunderbolt",
+    "Meteor", "Nova", "Quasar", "Nebula", "Eclipse", "Aurora", "Mirage",
+    "Tempest", "Gale", "Breeze", "Hailstone", "Sunbeam", "Moonbeam",
+    # things
+    "Teapot", "Toaster", "Spanner", "Hammer", "Anvil", "Lantern", "Compass",
+    "Pretzel", "Dumpling", "Muffin", "Pancake", "Waffle", "Meatball",
+    "Pickle", "Turnip", "Radish", "Pepper", "Noodle", "Crumpet", "Bagel",
+    "Sprocket", "Piston", "Gizmo", "Widget", "Trumpet", "Banjo", "Kazoo",
+    "Boomerang", "Yo-yo", "Pinball", "Marble", "Arrow", "Javelin", "Cannonball",
+    # characters
+    "Bandit", "Pirate", "Rascal", "Outlaw", "Ranger", "Nomad", "Wizard",
+    "Goblin", "Troll", "Pixie", "Sprite", "Phantom", "Knight", "Baron",
+    "Duchess", "Captain", "Maverick", "Drifter", "Jester", "Scout",
+]
 
 _lock = threading.Lock()
 

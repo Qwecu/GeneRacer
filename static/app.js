@@ -327,12 +327,15 @@ function renderTrackList(containerId, which, selectedId, onPick) {
   for (const def of [...visibleTracks(), state.randomDefs[which]]) {
     const card = document.createElement('div');
     card.className = 'track-card' + (def.id === selectedId ? ' selected' : '') + (def.unsaved ? ' random' : '');
-    const rec = hallOf(def)[0];
+    const podium = hallOf(def).slice(0, 3);
     const label = def.unsaved ? 'Random: ' : '';
     const seedLine = def.custom ? `<div class="tmeta">Seed: <code>${esc(def.seedText || def.seed)}</code></div>` : '';
     card.innerHTML = `<div class="tname">${label}${esc(def.name)}</div>
       <div class="tmeta">${trackConditions(def)}</div>${seedLine}
-      <div class="tmeta holder">${rec ? `<span class="crown">#1</span> ${holderHTML(rec)} &middot; ${recordText(rec)}` : 'No number 1 yet'}</div>`;
+      <div class="tmeta podium">${podium.length
+        ? podium.map((e, i) => `<div class="holder"><span class="medal ${MEDALS[i][0]}">${i + 1}</span> ${holderHTML(e)}
+            <span class="pod-car">${esc(e.car_name)}</span> &middot; ${e.finished ? fmtTime(e.time) : fmtKm(e.distance)}</div>`).join('')
+        : 'No runs yet'}</div>`;
     card.appendChild(trackThumbnail(def));
     const buttons = document.createElement('div');
     buttons.className = 'track-buttons';

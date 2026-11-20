@@ -193,7 +193,9 @@ header { flex-wrap: wrap; }
 .hall-track td.rank { width: 32px; text-align: right; font-variant-numeric: tabular-nums; }
 .crown { display: inline-block; background: #f5c518; color: #222; font-weight: 700; font-size: 0.75rem; padding: 1px 5px; border-radius: 6px; }
 .swatch.small { width: 10px; height: 10px; margin-right: 4px; vertical-align: middle; }
-.track-card .holder { color: var(--text); }
+.track-card .holder { color: var(--text); margin: 2px 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.track-card .podium { margin: 4px 0; }
+.track-card .pod-car { color: var(--muted); }
 .hall-track td { white-space: nowrap; }
 .ghost-mode { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 0.9rem; }
 
