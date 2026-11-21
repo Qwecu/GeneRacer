@@ -19,10 +19,13 @@ CARS_FILE = os.path.join(DATA_DIR, "cars.json")
 RECORDS_FILE = os.path.join(DATA_DIR, "records.json")
 TRACKS_FILE = os.path.join(DATA_DIR, "tracks.json")
 PROFILES_FILE = os.path.join(DATA_DIR, "profiles.json")
+TAUNTS_FILE = os.path.join(DATA_DIR, "taunts.json")
 
 STARTER_CARS = 6
 MAX_CARS = 20      # drivable cars one player may own; retired cars do not count
 HALL_SIZE = 100    # places saved in each track's time-trial hall of fame
+TAUNT_LENGTH = 140  # characters in one taunt
+TAUNTS_KEPT = 50    # taunts kept per recipient; the oldest read ones go first
 GHOST_PLACES = 10  # only the top places keep their ghost (they are large)
 PROFILE_COLORS = ["#e74c3c", "#3498db", "#2ecc71", "#f1c40f", "#9b59b6", "#e67e22",
                   "#1abc9c", "#e84393", "#34495e", "#a0522d"]
@@ -122,6 +125,8 @@ class Garage:
         # custom: saved seed-generated track definitions; hidden: ids of built-in tracks the admin removed
         self.tracks = _load(TRACKS_FILE, {"custom": [], "hidden": []})
         self.profiles = _load(PROFILES_FILE, [])
+        self._pending = {}     # (profile id, track key) -> profiles the latest run newly beat
+        self.taunts = _load(TAUNTS_FILE, [])     # [{id, from, to, track, track_name, text, date, read}]
         if not self.profiles and self.cars:
             # Data from before profiles existed: everything already in the
             # garage belongs to the first player.
@@ -241,8 +246,10 @@ class Garage:
             self._profile(profile_id)
             self.profiles = [p for p in self.profiles if p["id"] != profile_id]
             self.cars = [c for c in self.cars if c.get("owner") != profile_id]
+            self.taunts = [t for t in self.taunts if profile_id not in (t["from"], t["to"])]
             self._persist()
             _save(PROFILES_FILE, self.profiles)
+            _save(TAUNTS_FILE, self.taunts)
 
     # ---------------- cars ----------------
 
@@ -340,7 +347,9 @@ class Garage:
         an entry that drops below them loses it.
 
         Returns {"rank": n or None, "best_rank": rank of this player+car's
-        entry after the update, or None}.
+        entry after the update, or None, "surpassed": [{"id", "name"}]}.
+        "surpassed" lists the other players with a place below this car's new
+        place anywhere in the hall of fame (they can be taunted).
         """
         rec = {
             "finished": bool(rec["finished"]),
@@ -355,24 +364,73 @@ class Garage:
             "date": time.time(),
         }
         if not rec["finished"] and rec["distance"] <= 0:
-            return {"rank": None, "best_rank": None}
+            return {"rank": None, "best_rank": None, "surpassed": []}
         mine = lambda e: rec["profile_id"] and e.get("profile_id") == rec["profile_id"] and e.get("car_id") == rec["car_id"]
         with _lock:
             hall = list(self.hall(track_id))
             previous = next((e for e in hall if mine(e)), None)
+            self._pending.pop((rec["profile_id"], track_id), None)
             if previous is not None and not self._better(rec, previous):
-                return {"rank": None, "best_rank": hall.index(previous) + 1}
+                return {"rank": None, "best_rank": hall.index(previous) + 1, "surpassed": []}
             hall = [e for e in hall if e is not previous] + [rec]
             hall.sort(key=self._rank_key)       # stable: on a tie the older run stays ahead
             hall = hall[:HALL_SIZE]
             if not any(e is rec for e in hall):
-                return {"rank": None, "best_rank": None}
+                return {"rank": None, "best_rank": None, "surpassed": []}
             for e in hall[GHOST_PLACES:]:
                 e.pop("ghost", None)
             self.records[track_id] = hall
             _save(RECORDS_FILE, self.records)
             rank = next(i for i, e in enumerate(hall) if e is rec) + 1
-            return {"rank": rank, "best_rank": rank}
+            surpassed = self._below(hall, rec)
+            if surpassed:
+                self._pending[(rec["profile_id"], track_id)] = [p["id"] for p in surpassed]
+            return {"rank": rank, "best_rank": rank, "surpassed": surpassed}
+
+    def _below(self, hall, rec):
+        """Other players with a place below the car's new place anywhere in the top 100."""
+        mine_new = next(i for i, e in enumerate(hall) if e is rec)
+        names = {p["id"]: p["name"] for p in self.profiles}
+        pids = dict.fromkeys(e.get("profile_id") for e in hall[mine_new + 1:])
+        return [{"id": pid, "name": names[pid]} for pid in pids if pid != rec["profile_id"] and pid in names]
+
+    # ---------------- taunts ----------------
+
+    def send_taunt(self, sender, track_id, track_name, text):
+        """
+        Leaves a message for the players the sender's latest time-trial run on
+        this track put below their car (see submit_record).  One message
+        per run: the list of targets is used up by sending.
+        """
+        text = str(text).strip()[:TAUNT_LENGTH]
+        if not text:
+            raise ValueError("The taunt is empty")
+        with _lock:
+            targets = self._pending.pop((sender, track_id), [])
+            if not targets:
+                raise ValueError("There is nobody to taunt after that run")
+            for target in targets:
+                self.taunts.append({"id": uuid.uuid4().hex[:10], "from": sender, "to": target,
+                                    "track": str(track_id)[:80], "track_name": str(track_name)[:80],
+                                    "text": text, "date": time.time(), "read": False})
+                received = [t for t in self.taunts if t["to"] == target]
+                if len(received) > TAUNTS_KEPT:
+                    self.taunts.remove(next((t for t in received if t["read"]), received[0]))
+            _save(TAUNTS_FILE, self.taunts)
+        return len(targets)
+
+    def taunts_for(self, profile_id):
+        """Newest first, with the sender's current name."""
+        names = {p["id"]: p["name"] for p in self.profiles}
+        return [{**t, "from_name": names.get(t["from"], "?")}
+                for t in reversed(self.taunts) if t["to"] == profile_id]
+
+    def mark_taunts_read(self, profile_id):
+        with _lock:
+            for t in self.taunts:
+                if t["to"] == profile_id:
+                    t["read"] = True
+            _save(TAUNTS_FILE, self.taunts)
 
     # ---------------- tracks ----------------
 

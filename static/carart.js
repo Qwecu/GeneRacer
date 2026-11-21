@@ -95,16 +95,24 @@ function drawCar(ctx, looks, x, y, angle, scale = 1, opts = {}) {
     ctx.fill();
   }
 
-  // headlights
-  ctx.fillStyle = `hsl(${looks.light_hue}, 90%, 80%)`;
+  // headlights and tail lights. While a steering key is held (before the car's
+  // reaction delay has passed) the lights on that side turn bright yellow, so the
+  // driver can see the key press registered. opts.steerKeys = { left, right }.
+  const keys = opts.steerKeys || {};
+  const lit = sy => (sy < 0 ? keys.left : keys.right);
   for (const sy of [-1, 1]) {
+    const on = lit(sy);
+    ctx.save();
+    if (on) { ctx.shadowColor = '#ffe600'; ctx.shadowBlur = 6; }
+    ctx.fillStyle = on ? '#ffe600' : `hsl(${looks.light_hue}, 90%, 80%)`;
     ctx.beginPath();
-    ctx.ellipse(L / 2 - 2, sy * W * 0.3, 1.4, 2.2, 0, 0, Math.PI * 2);
+    ctx.ellipse(L / 2 - 2, sy * W * 0.3, on ? 2 : 1.4, on ? 3 : 2.2, 0, 0, Math.PI * 2);
     ctx.fill();
+    ctx.fillStyle = on ? '#ffe600' : '#c0201a';
+    if (on) ctx.fillRect(-L / 2 - 0.5, sy * W * 0.3 - 2, 2.6, 4);
+    else ctx.fillRect(-L / 2 + 0.5, sy * W * 0.3 - 1.5, 1.6, 3);
+    ctx.restore();
   }
-  // tail lights
-  ctx.fillStyle = '#c0201a';
-  for (const sy of [-1, 1]) ctx.fillRect(-L / 2 + 0.5, sy * W * 0.3 - 1.5, 1.6, 3);
 
   // damage smoke marks
   if (opts.damage && opts.damage > 0.4) {

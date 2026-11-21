@@ -271,3 +271,15 @@ header h1 .logo { height: 2.2rem; display: block; }
   72%, 88% { opacity: 1; }
   96% { opacity: 0; }
 }
+table.results tr.mine { background: var(--accent-soft); }
+table.results tr.gap td { text-align: center; color: var(--muted); padding: 0 12px; }
+
+#taunt-dialog { border: none; border-radius: 10px; padding: 18px 22px; width: 420px; max-width: calc(100vw - 32px); }
+#taunt-dialog h3 { color: var(--text); text-transform: none; letter-spacing: 0; font-size: 1rem; margin-top: 0; }
+#taunt-dialog .toolbar { justify-content: flex-end; margin: 12px 0 0; }
+.taunt { padding: 8px 10px; border-left: 3px solid var(--line); margin-bottom: 8px; }
+.taunt.new { border-left-color: var(--bad); background: var(--accent-soft); }
+.taunt-text { font-weight: 600; overflow-wrap: anywhere; }
+body.is-admin .player-only { display: none; }
+.taunt-box { margin: 12px auto; max-width: 460px; }
+.taunt-box input { width: 100%; box-sizing: border-box; margin-bottom: 8px; }

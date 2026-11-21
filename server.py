@@ -75,12 +75,15 @@ class Handler(BaseHTTPRequestHandler):
                 who = accounts.session(self._token())
                 return self._json(who and {**who, "name": ADMIN_NAME if who["admin"] else
                                            garage._profile(who["profile_id"])["name"]})
-            self._who()
+            who = self._who()
             if path == "/api/garage":
                 return self._json({"cars": garage.list(), "trait_info": trait_info_json(), "max_cars": MAX_CARS})
             if path == "/api/profiles":
                 return self._json([{**p, "has_password": accounts.has_password(p["id"])}
                                    for p in garage.list_profiles()])
+            if path == "/api/taunts":
+                # taunts other players sent the logged-in player (the admin gets none)
+                return self._json([] if who["admin"] else garage.taunts_for(who["profile_id"]))
             if path == "/api/tracks":
                 return self._json(garage.tracks)
             if path == "/api/records":
@@ -155,6 +158,17 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/rename":
             self._may(who, garage.owner_of(body["id"]))
             garage.rename(body["id"], body["name"])
+            return ok()
+
+        # ---- taunts ----
+        if path == "/api/taunt":
+            if who["admin"]:
+                raise Forbidden("The admin has no races to boast about")
+            n = garage.send_taunt(who["profile_id"], body["track"], body.get("track_name", ""), body["text"])
+            return self._json({"ok": True, "sent": n})
+        if path == "/api/taunts/read":
+            if not who["admin"]:
+                garage.mark_taunts_read(who["profile_id"])
             return ok()
 
         # ---- accounts ----

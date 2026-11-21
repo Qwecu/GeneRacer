@@ -72,6 +72,7 @@ async function startSession() {
   state.players = [{ profileId: null, carId: null }, { profileId: null, carId: null }];
   resetPlayerView();
   await loadAll();
+  if (!me.admin) showTaunts(true);
 }
 
 function bindAuthForm(id, path) {
@@ -129,6 +130,33 @@ function askForm(title, fields) {
     dlg.showModal();
   });
 }
+
+// =====================================================================
+// Taunts: a player who is ahead of another on a track's hall of fame can
+// leave them a message, which they read when they log in.
+// =====================================================================
+
+// Opens the taunt box.  unreadOnly: the login popup, which stays closed when
+// there is nothing new.  The Taunts button lists everything received.
+async function showTaunts(unreadOnly) {
+  let taunts;
+  try { taunts = await api('/api/taunts'); } catch (e) { return; }
+  const fresh = taunts.filter(t => !t.read);
+  const list = unreadOnly ? fresh : taunts;
+  if (unreadOnly && !fresh.length) return;
+  document.getElementById('taunt-title').textContent =
+    unreadOnly ? (fresh.length === 1 ? 'Someone has a message for you' : `${fresh.length} messages for you`) : 'Taunts you received';
+  document.getElementById('taunt-list').innerHTML = list.length ? list.map(t => `
+    <div class="taunt ${t.read ? '' : 'new'}">
+      <div class="taunt-text">&ldquo;${esc(t.text)}&rdquo;</div>
+      <div class="hint">${esc(t.from_name)} on ${esc(t.track_name)}, ${new Date(t.date * 1000).toLocaleString()}</div>
+    </div>`).join('') : '<p class="hint">Nobody has taunted you yet.</p>';
+  const dlg = document.getElementById('taunt-dialog');
+  dlg.onclose = () => { if (fresh.length) api('/api/taunts/read', {}).catch(() => {}); };
+  document.getElementById('taunt-close').onclick = () => dlg.close();
+  if (!dlg.open) dlg.showModal();
+}
+document.getElementById('btn-taunts').onclick = () => showTaunts(false);
 
 // =====================================================================
 // Loading
@@ -702,6 +730,7 @@ document.getElementById('btn-start-trial').onclick = async () => {
   const hall = await api('/api/hall/' + encodeURIComponent(key));
   const record = hall[0] ? { ...hall[0], driver: holderName(hall[0]) } : null;
   const player = me();
+  let surpassed = [];     // players this run newly put below the car
   new RaceSession({
     trackDef: def, entries: [{ driver: player.name, car, color: player.color }], mode: 'trial', recordGhost: record,
     trialGhosts: pickGhosts(hall, player, car),
@@ -714,15 +743,69 @@ document.getElementById('btn-start-trial').onclick = async () => {
           looks: car.looks, ghost: r.ghost,
         },
       });
+      surpassed = res.surpassed || [];
       if (res.rank === 1) return '<p class="big"><b>New number 1 on this track!</b></p>';
       if (res.rank) return `<p class="big"><b>Hall of fame: place ${res.rank}</b></p>` +
         (res.rank > 10 ? '<p class="hint">Only the top 10 keep a ghost.</p>' : '');
       if (res.best_rank) return `<p>Not better than ${esc(car.name)}'s earlier run, which stays at place ${res.best_rank}.</p>`;
       return '<p>Not in the top 100 this time.</p>';
     },
+    // end screen: top 3, this car's place, and two places above and below it
+    trialStandings: async () => {
+      state.records = await api('/api/records');
+      setTimeout(() => bindTauntBox(key, def.name), 0);
+      return trialStandingsHTML(state.records[key] || [], player, car) + tauntBoxHTML(surpassed);
+    },
     onExit: afterRace,
   }).start();
 };
+
+// Time trial end screen: after a run that put other players below this car
+// for the first time, offer one message to all of them.
+function tauntBoxHTML(surpassed) {
+  if (!surpassed.length) return '';
+  return `<div id="taunt-box" class="taunt-box">
+    <p><b>Below you now: ${surpassed.map(p => esc(p.name)).join(', ')}.</b> Taunt ${surpassed.length === 1 ? "them" : "them all"}?</p>
+    <input id="taunt-input" maxlength="140" placeholder="Your message (up to 140 characters)" autocomplete="off">
+    <button class="primary" id="taunt-send">Send taunt</button>
+    <p class="hint" id="taunt-status">They read it when they log in.</p></div>`;
+}
+
+function bindTauntBox(track, trackName) {
+  const box = document.getElementById('taunt-box');
+  if (!box) return;
+  const input = document.getElementById('taunt-input'), status = document.getElementById('taunt-status');
+  input.onkeydown = ev => { ev.stopPropagation(); if (ev.key === 'Enter') document.getElementById('taunt-send').click(); };
+  document.getElementById('taunt-send').onclick = async () => {
+    const text = input.value.trim();
+    if (!text) { status.textContent = 'Type a message first.'; return; }
+    try {
+      await api('/api/taunt', { track, track_name: trackName, text });
+      box.innerHTML = '<p><b>Taunt sent.</b> They read it when they log in.</p>';
+    } catch (e) { status.textContent = e.message; }
+  };
+}
+
+// Hall of fame excerpt for the time trial end screen: the top 3, the player's
+// car, and the two places above and below it. Gaps are shown as "...".
+function trialStandingsHTML(hall, player, car) {
+  const mine = hall.findIndex(e => e.profile_id === player.id && e.car_id === car.id);
+  const show = new Set([0, 1, 2].filter(i => i < hall.length));
+  if (mine >= 0) for (let i = mine - 2; i <= mine + 2; i++) if (i >= 0 && i < hall.length) show.add(i);
+  const idx = [...show].sort((a, b) => a - b);
+  let rows = '', prev = -1;
+  for (const i of idx) {
+    if (prev >= 0 && i > prev + 1) rows += '<tr class="gap"><td colspan="4">...</td></tr>';
+    const e = hall[i];
+    rows += `<tr class="${i === mine ? 'mine' : ''}"><td>${i + 1}.</td><td>${holderHTML(e)}</td>
+      <td>${e.looks && e.looks.width ? `<img class="car-icon" src="${carIconURL(e.looks)}"> ` : ''}${esc(e.car_name)}</td>
+      <td>${e.finished ? fmtTime(e.time) : fmtKm(e.distance)}</td></tr>`;
+    prev = i;
+  }
+  if (!rows) return '<p class="hint">No runs on this track yet.</p>';
+  const note = mine < 0 ? `<p class="hint">${esc(car.name)} is not in the top ${hall.length >= 100 ? 100 : hall.length} yet.</p>` : '';
+  return `<table class="results"><tr><th></th><th>Driver</th><th>Car</th><th></th></tr>${rows}</table>${note}`;
+}
 
 // Which hall of fame ghosts drive along, from the "Ghosts" choice.
 // "My best" is this player's entry with the car they are driving now.

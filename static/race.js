@@ -462,7 +462,8 @@ class RaceSession {
       ${extra}
       <p><b>Press Space to ${last ? 'see results' : 'continue to the next player'}</b></p>`);
     if (this.onRunFinished) {
-      this.onRunFinished(r)
+      this.runSaved = this.onRunFinished(r);   // the end screen waits for this before reading the hall of fame
+      this.runSaved
         .then(html => { const el = document.getElementById('run-extra'); if (el) el.outerHTML = html; })
         .catch(() => { const el = document.getElementById('run-extra'); if (el) el.textContent = 'Could not reach the hall of fame.'; });
     }
@@ -486,12 +487,19 @@ class RaceSession {
       <td>${r.finished ? fmtTime(r.time) : fmtKm(r.distance)}</td></tr>`).join('');
     const winner = ranked[0];
     const how = winner.finished ? 'fastest to the finish' : 'nobody finished, furthest distance wins';
+    const trial = this.mode !== 'hotseat' && this.trialStandings;
+    const table = trial ? '<div id="trial-standings" class="hint">Loading the hall of fame...</div>'
+      : `<table class="results"><tr><th></th><th>Driver</th><th>Car</th><th>Result</th><th></th></tr>${rows}</table>`;
     this.showOverlay(`
       <h2>${this.mode === 'hotseat' ? `${esc(winner.driver)} wins!` : 'Time trial over'}</h2>
       ${this.mode === 'hotseat' ? `<p class="hint">${how}</p>` : ''}
-      <table class="results"><tr><th></th><th>Driver</th><th>Car</th><th>Result</th><th></th></tr>${rows}</table>
+      ${table}
       <p><button class="primary" id="btn-race-done">Back to menu</button></p>`);
     document.getElementById('btn-race-done').onclick = () => this.exit();
+    if (trial) {
+      const fill = html => { const el = document.getElementById('trial-standings'); if (el) el.outerHTML = html; };
+      Promise.resolve(this.runSaved).catch(() => {}).then(() => this.trialStandings()).then(fill).catch(() => fill('<p class="hint">Could not reach the hall of fame.</p>'));
+    }
   }
 
   exit() {
@@ -625,7 +633,7 @@ class RaceSession {
     });
 
     // the car
-    drawCar(ctx, run.car.looks, run.x, run.y, run.a, 1, { damage: 1 - run.hp / run.st.durability });
+    drawCar(ctx, run.car.looks, run.x, run.y, run.a, 1, { damage: 1 - run.hp / run.st.durability, steerKeys: run.raw });
     if (run.lastImpact >= 0 && run.time - run.lastImpact < 0.25) {
       ctx.fillStyle = 'rgba(255,200,80,0.7)';
       ctx.beginPath(); ctx.arc(run.x, run.y, 18, 0, Math.PI * 2); ctx.fill();
