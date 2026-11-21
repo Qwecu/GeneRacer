@@ -11,6 +11,7 @@ the admin account may act as any player.
 
 import json
 import os
+import ssl
 import sys
 import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -294,19 +295,33 @@ if __name__ == "__main__":
     # Default is this machine only.  --public listens on all network interfaces
     # so other computers can connect (also allow the port in the firewall).
     HOST = "0.0.0.0" if "--public" in sys.argv else "localhost"
+    # HTTPS: --cert cert.pem --key key.pem (or env GENERACER_CERT / GENERACER_KEY).
+    def arg(name, env):
+        return sys.argv[sys.argv.index(name) + 1] if name in sys.argv[:-1] else os.environ.get(env)
+    CERT, KEY = arg("--cert", "GENERACER_CERT"), arg("--key", "GENERACER_KEY")
+    SCHEME = "https" if CERT else "http"
     try:
         server = Server((HOST, PORT), Handler)
     except OSError:
         print(f"Port {PORT} is already in use: is Make No Mistakes! already running? "
               f"Open http://localhost:{PORT} or stop the other server first.")
         sys.exit(1)
-    url = f"http://localhost:{PORT}"
+    if CERT:
+        try:
+            ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+            ctx.minimum_version = ssl.TLSVersion.TLSv1_2
+            ctx.load_cert_chain(CERT, KEY)
+        except (OSError, ssl.SSLError) as e:
+            print(f"Cannot load the certificate/key: {e}")
+            sys.exit(1)
+        server.socket = ctx.wrap_socket(server.socket, server_side=True)
+    url = f"{SCHEME}://localhost:{PORT}"
     if accounts.new_admin_password:
         print(f"Created the admin account.  Username: {ADMIN_NAME}  Password: {accounts.new_admin_password}")
         print(f"(Also saved in {ADMIN_FILE}.  Change it in the game; the file is then deleted.)")
     print(f"Make No Mistakes! running at {url}  (Ctrl+C to stop)")
     if HOST != "localhost":
-        print(f"Public: other computers can use http://<this computer's IP or name>:{PORT}")
+        print(f"Public: other computers can use {SCHEME}://<this computer's IP or name>:{PORT}")
     if "--no-browser" not in sys.argv:
         webbrowser.open(url)
     try:

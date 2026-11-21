@@ -17,6 +17,12 @@ machines get "connection refused". With `--public`, open
 `http://<host IP or name>:2793` from another computer. On Windows, allow the
 port through the firewall once (admin PowerShell):
 `New-NetFirewallRule -DisplayName GeneRacer -Direction Inbound -Protocol TCP -LocalPort 2793 -Action Allow`.
+HTTPS: pass a certificate and private key in PEM format,
+`py server.py --public --cert cert.pem --key key.pem` (or set `GENERACER_CERT`
+and `GENERACER_KEY`). Use a certificate from your CA or Let's Encrypt for a
+real host name. For local testing, `mkcert` creates a trusted one; a self-signed
+one (`openssl req -x509 -newkey rsa:2048 -nodes -keyout key.pem -out cert.pem -days 365 -subj /CN=localhost`)
+works but browsers show a warning. Without `--cert` the server uses plain HTTP.
 Behind a reverse proxy or hosting platform, the app must run with `--public`
 and the platform must route to port 2793.
 
