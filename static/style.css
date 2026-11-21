@@ -258,6 +258,8 @@ body:not(.is-admin) .admin-only { display: none; }
 .hint.warn { color: var(--bad); }
 .car-card .card-delete { margin-top: 8px; width: 100%; }
 
+.info-banner { background: #ffea00; color: #111; font-weight: 700; padding: 10px 14px; border-radius: 8px; margin: 8px 0 14px; }
+
 /* ---------- logo ---------- */
 header h1 .logo { height: 2.2rem; display: block; }
 #logo-flash { position: fixed; inset: 0; z-index: 1000; display: none; align-items: center; justify-content: center;
@@ -295,3 +297,6 @@ body.is-admin .player-only { display: none; }
 .news-medal { flex: none; }
 .news-taunt { font-weight: 600; margin-top: 4px; overflow-wrap: anywhere; }
 #news-list { max-width: 720px; }
+
+nav button.play-tab { background: #ffd23f; color: #3a2e00; border-color: #d4a900; font-weight: 700; }
+nav button.play-tab.active { background: #ffd23f; color: #3a2e00; border-color: #3a2e00; box-shadow: 0 0 0 2px #3a2e00 inset; }

@@ -366,7 +366,11 @@ function renderGarage() {
     del.title = `Delete ${car.name}`;
     del.onclick = (ev) => { ev.stopPropagation(); deleteCar(car); };
     card.appendChild(del);
-    card.onclick = () => { state.viewing = car.id; renderGarage(); };
+    card.onclick = () => {
+      state.viewing = car.id;
+      if (!car.retired) { state.trialCar = car.id; renderTrialSetup(); }    // the same car is preselected on the PLAY page
+      renderGarage();
+    };
     grid.appendChild(card);
   }
   const btn = document.getElementById('btn-breed');
