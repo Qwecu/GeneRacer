@@ -44,6 +44,12 @@ class LoggedOut(Exception):
 
 
 class Handler(BaseHTTPRequestHandler):
+    timeout = 20    # a client that stalls cannot hold a thread forever
+
+    def setup(self):
+        super().setup()
+        if isinstance(self.request, ssl.SSLSocket):
+            self.request.do_handshake()   # TLS handshake in the worker thread, not the accept loop
 
     # ---------------- auth helpers ----------------
 
@@ -337,7 +343,8 @@ if __name__ == "__main__":
         except (OSError, ssl.SSLError) as e:
             print(f"Cannot load the certificate/key: {e}")
             sys.exit(1)
-        server.socket = ctx.wrap_socket(server.socket, server_side=True)
+        server.socket = ctx.wrap_socket(server.socket, server_side=True,
+                                        do_handshake_on_connect=False)
     url = f"{SCHEME}://localhost:{PORT}"
     if accounts.new_admin_password:
         print(f"Created the admin account.  Username: {ADMIN_NAME}  Password: {accounts.new_admin_password}")
