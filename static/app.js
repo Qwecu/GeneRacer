@@ -1011,6 +1011,14 @@ function starHTML(car) {
 // Entries remember the player's id, so renamed players show their new name;
 // runs by deleted players keep the name they had.
 function holderName(e) { return profileById(e.profile_id)?.name || e.driver; }
+// Tooltip text with a car's stats (hall of fame hover); empty if the car no longer exists.
+function carTitleAttr(car) {
+  if (!car) return '';
+  const rows = state.traitInfo.map(i => `${i.label}: ${car.stats[i.key]} ${i.unit}`.trim());
+  const head = `${car.name}${car.retired ? ' (retired)' : ''}, gen ${car.generation}`;
+  return ` title="${esc([head, ...rows, `Odometer: ${car.odometer_km.toFixed(1)} / ${car.stats.lifespan_km} km`].join('\n'))}"`;
+}
+
 function holderHTML(e) {
   const p = profileById(e.profile_id);
   return `<span class="swatch small" style="background:${p ? p.color : '#bbb'}"></span><b>${esc(holderName(e))}</b>`;
@@ -1038,7 +1046,7 @@ function standingsHTML() {
     const owner = profileById(x.car.owner);
     return `<tr class="${x.car.owner === state.profileId ? 'mine' : ''}${x.car.retired ? ' retired' : ''}">
       <td class="rank">${carRanks[i]}</td>
-      <td><span class="icon-wrap small"><img class="car-icon" src="${carIconURL(x.car.looks)}" alt="">${starHTML(x.car)}</span>
+      <td${carTitleAttr(x.car)}><span class="icon-wrap small"><img class="car-icon" src="${carIconURL(x.car.looks)}" alt="">${starHTML(x.car)}</span>
         <b>${esc(x.car.name)}</b> ${trophyBadges(x.car)}${x.car.retired ? ' <span class="badge retired">retired</span>' : ''}</td>
       <td><span class="swatch small" style="background:${owner ? owner.color : '#bbb'}"></span>${owner ? esc(owner.name) : ''}</td>
       <td class="pts">${x.points}</td></tr>`;
@@ -1076,7 +1084,7 @@ function renderRecords() {
       <tr class="${e.profile_id === state.profileId ? 'mine' : ''}${carById(e.car_id)?.retired ? ' retired' : ''}">
         <td class="rank">${i === 0 ? '<span class="crown">#1</span>' : i + 1}</td>
         <td>${holderHTML(e)}</td>
-        <td>${e.looks && e.looks.width ? `<img class="car-icon" src="${carIconURL(e.looks)}"> ` : ''}${esc(e.car_name)}</td>
+        <td${carTitleAttr(carById(e.car_id))}>${e.looks && e.looks.width ? `<img class="car-icon" src="${carIconURL(e.looks)}"> ` : ''}${esc(e.car_name)}</td>
         <td>${recordText(e)}</td>
         <td class="hint">${new Date(e.date * 1000).toLocaleDateString()}</td></tr>`).join('');
     return `<div class="hall-track">
