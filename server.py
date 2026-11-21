@@ -81,6 +81,8 @@ class Handler(BaseHTTPRequestHandler):
             if path == "/api/profiles":
                 return self._json([{**p, "has_password": accounts.has_password(p["id"])}
                                    for p in garage.list_profiles()])
+            if path == "/api/news":
+                return self._json(garage.news_list())
             if path == "/api/taunts":
                 # taunts other players sent the logged-in player (the admin gets none)
                 return self._json([] if who["admin"] else garage.taunts_for(who["profile_id"]))
@@ -220,7 +222,8 @@ class Handler(BaseHTTPRequestHandler):
             self._may(who, rec.get("profile_id"))
             if garage.owner_of(rec.get("car_id")) != rec.get("profile_id"):
                 raise Forbidden("That car belongs to another player")
-            return self._json(garage.submit_record(body["track"], rec))
+            extra = {"status": body.get("status"), "track_name": body.get("track_name")}
+            return self._json(garage.submit_record(body["track"], rec, extra))
 
         # ---- tracks (shared) ----
         if path == "/api/tracks/save":

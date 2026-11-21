@@ -283,3 +283,15 @@ table.results tr.gap td { text-align: center; color: var(--muted); padding: 0 12
 body.is-admin .player-only { display: none; }
 .taunt-box { margin: 12px auto; max-width: 460px; }
 .taunt-box input { width: 100%; box-sizing: border-box; margin-bottom: 8px; }
+.news { padding: 10px 14px; border-radius: 8px; margin-bottom: 8px; background: var(--panel); border-left: 6px solid var(--line); }
+.news.gold { background: #f6d860; border-left-color: #c9a227; }
+.news.silver { background: #d9dde2; border-left-color: #8d96a0; }
+.news.bronze { background: #e3b184; border-left-color: #a8693a; }
+.news.crash { background: #f1a6a0; border-left-color: #c0392b; }
+.news.fuel { background: #f8ee9a; border-left-color: #d4b800; }
+.news .hint { color: rgba(0,0,0,0.55); }
+.news { display: flex; gap: 12px; align-items: center; }
+.news-body { flex: 1; min-width: 0; }
+.news-medal { flex: none; }
+.news-taunt { font-weight: 600; margin-top: 4px; overflow-wrap: anywhere; }
+#news-list { max-width: 720px; }

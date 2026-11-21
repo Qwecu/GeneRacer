@@ -20,11 +20,13 @@ RECORDS_FILE = os.path.join(DATA_DIR, "records.json")
 TRACKS_FILE = os.path.join(DATA_DIR, "tracks.json")
 PROFILES_FILE = os.path.join(DATA_DIR, "profiles.json")
 TAUNTS_FILE = os.path.join(DATA_DIR, "taunts.json")
+NEWS_FILE = os.path.join(DATA_DIR, "news.json")
 
 STARTER_CARS = 6
 MAX_CARS = 20      # drivable cars one player may own; retired cars do not count
 HALL_SIZE = 100    # places saved in each track's time-trial hall of fame
 TAUNT_LENGTH = 140  # characters in one taunt
+NEWS_KEPT = 100     # news posts saved
 TAUNTS_KEPT = 50    # taunts kept per recipient; the oldest read ones go first
 GHOST_PLACES = 10  # only the top places keep their ghost (they are large)
 PROFILE_COLORS = ["#e74c3c", "#3498db", "#2ecc71", "#f1c40f", "#9b59b6", "#e67e22",
@@ -125,7 +127,8 @@ class Garage:
         # custom: saved seed-generated track definitions; hidden: ids of built-in tracks the admin removed
         self.tracks = _load(TRACKS_FILE, {"custom": [], "hidden": []})
         self.profiles = _load(PROFILES_FILE, [])
-        self._pending = {}     # (profile id, track key) -> profiles the latest run newly beat
+        self._pending = {}     # (profile id, track key) -> {"to": profile ids below the car, "news": post id}
+        self.news = _load(NEWS_FILE, [])         # oldest first, last NEWS_KEPT kept
         self.taunts = _load(TAUNTS_FILE, [])     # [{id, from, to, track, track_name, text, date, read}]
         if not self.profiles and self.cars:
             # Data from before profiles existed: everything already in the
@@ -339,7 +342,7 @@ class Garage:
     def hall(self, track_id):
         return self.records.get(track_id, [])
 
-    def submit_record(self, track_id, rec):
+    def submit_record(self, track_id, rec, extra=None):
         """
         Offer a time-trial run to the track's shared hall of fame (top
         HALL_SIZE).  Each player+car pair holds at most one place, replaced
@@ -369,6 +372,7 @@ class Garage:
         with _lock:
             hall = list(self.hall(track_id))
             previous = next((e for e in hall if mine(e)), None)
+            old = list(hall)
             self._pending.pop((rec["profile_id"], track_id), None)
             if previous is not None and not self._better(rec, previous):
                 return {"rank": None, "best_rank": hall.index(previous) + 1, "surpassed": []}
@@ -383,9 +387,35 @@ class Garage:
             _save(RECORDS_FILE, self.records)
             rank = next(i for i, e in enumerate(hall) if e is rec) + 1
             surpassed = self._below(hall, rec)
+            old_rank = old.index(previous) + 1 if previous is not None else None
+            # every accepted run changes the hall of fame (a new place or a better run)
+            news_id = self._post_news(old, hall, rec, previous, rank, old_rank, track_id, extra)
             if surpassed:
-                self._pending[(rec["profile_id"], track_id)] = [p["id"] for p in surpassed]
+                self._pending[(rec["profile_id"], track_id)] = {"to": [p["id"] for p in surpassed], "news": news_id}
             return {"rank": rank, "best_rank": rank, "surpassed": surpassed}
+
+    def _post_news(self, old, hall, rec, previous, rank, old_rank, track_id, extra):
+        """One news post for a run that changed hall of fame positions."""
+        extra = extra or {}
+        # entries that were above the car before and are below it now
+        above_before = {id(e) for e in old[:(old_rank - 1 if old_rank else len(old))]}
+        passed = []
+        for e in hall[rank:]:
+            name = e.get("driver", "?")
+            if id(e) in above_before and e.get("profile_id") != rec["profile_id"] and name not in passed:
+                passed.append(name)
+        post = {
+            "id": uuid.uuid4().hex[:10], "date": rec["date"],
+            "profile_id": rec["profile_id"], "driver": rec["driver"], "car_name": rec["car_name"],
+            "track": str(track_id)[:80], "track_name": str(extra.get("track_name") or "")[:80],
+            "status": str(extra.get("status") or "")[:20], "finished": rec["finished"],
+            "time": rec["time"], "distance": rec["distance"],
+            "rank": rank, "old_rank": old_rank, "passed": passed[:10], "taunt": None,
+        }
+        self.news.append(post)
+        del self.news[:-NEWS_KEPT]
+        _save(NEWS_FILE, self.news)
+        return post["id"]
 
     def _below(self, hall, rec):
         """Other players with a place below the car's new place anywhere in the top 100."""
@@ -406,7 +436,8 @@ class Garage:
         if not text:
             raise ValueError("The taunt is empty")
         with _lock:
-            targets = self._pending.pop((sender, track_id), [])
+            pending = self._pending.pop((sender, track_id), None) or {}
+            targets = pending.get("to", [])
             if not targets:
                 raise ValueError("There is nobody to taunt after that run")
             for target in targets:
@@ -417,7 +448,16 @@ class Garage:
                 if len(received) > TAUNTS_KEPT:
                     self.taunts.remove(next((t for t in received if t["read"]), received[0]))
             _save(TAUNTS_FILE, self.taunts)
+            post = next((n for n in self.news if n["id"] == pending.get("news")), None)
+            if post:
+                names = {p["id"]: p["name"] for p in self.profiles}
+                post["taunt"] = {"text": text, "to": [names.get(t, "?") for t in targets]}
+                _save(NEWS_FILE, self.news)
         return len(targets)
+
+    def news_list(self):
+        """Newest first."""
+        return list(reversed(self.news))
 
     def taunts_for(self, profile_id):
         """Newest first, with the sender's current name."""

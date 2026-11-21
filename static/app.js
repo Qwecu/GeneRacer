@@ -71,8 +71,8 @@ async function startSession() {
   if (!me.admin && document.getElementById('tab-race').classList.contains('active')) showTab('garage');   // hotseat is admin only
   state.players = [{ profileId: null, carId: null }, { profileId: null, carId: null }];
   resetPlayerView();
+  if (!me.admin) showTaunts(true);     // unread taunts pop up at once, whatever else is loading
   await loadAll();
-  if (!me.admin) showTaunts(true);
 }
 
 function bindAuthForm(id, path) {
@@ -145,7 +145,7 @@ async function showTaunts(unreadOnly) {
   const list = unreadOnly ? fresh : taunts;
   if (unreadOnly && !fresh.length) return;
   document.getElementById('taunt-title').textContent =
-    unreadOnly ? (fresh.length === 1 ? 'Someone has a message for you' : `${fresh.length} messages for you`) : 'Taunts you received';
+    'Taunts you have received';
   document.getElementById('taunt-list').innerHTML = list.length ? list.map(t => `
     <div class="taunt ${t.read ? '' : 'new'}">
       <div class="taunt-text">&ldquo;${esc(t.text)}&rdquo;</div>
@@ -178,6 +178,7 @@ async function loadAll() {
   state.traitInfo = g.trait_info;
   state.records = await api('/api/records');
   state.tracks = await api('/api/tracks');
+  state.news = await api('/api/news');
   state.raceTrack = validSelection(state.raceTrack, 'race');
   state.trialTrack = validSelection(state.trialTrack, 'trial');
   state.breedPick = state.breedPick.filter(id => carById(id));
@@ -213,6 +214,7 @@ function renderAll() {
   renderRaceSetup();
   renderTrialSetup();
   renderRecords();
+  renderNews();
 }
 
 // =====================================================================
@@ -736,7 +738,7 @@ document.getElementById('btn-start-trial').onclick = async () => {
     trialGhosts: pickGhosts(hall, player, car),
     onRunFinished: async (r) => {
       const res = await api('/api/record', {
-        track: key,
+        track: key, status: r.status, track_name: def.name,
         record: {
           finished: r.finished, time: r.time, distance: r.distance,
           driver: player.name, profile_id: player.id, car_name: car.name, car_id: car.id,
@@ -997,6 +999,50 @@ function renderRecords() {
     if (state.hallOpen.has(k)) state.hallOpen.delete(k); else state.hallOpen.add(k);
     renderRecords();
   });
+}
+
+// =====================================================================
+// News: one post per time trial run that changed hall of fame positions
+// =====================================================================
+
+// Background by result, in order of precedence.
+function newsClass(n) {
+  if (n.rank === 1) return 'gold';
+  if (n.rank === 2) return 'silver';
+  if (n.rank === 3) return 'bronze';
+  if (n.status === 'wrecked') return 'crash';
+  if (n.status === 'fuel') return 'fuel';
+  return '';
+}
+
+// Medal icon for a new 1st, 2nd or 3rd place.
+function medalIconHTML(rank) {
+  const c = { 1: ['#ffe066', '#c9a227', 'Gold'], 2: ['#f2f2f2', '#8d96a0', 'Silver'], 3: ['#f0b07a', '#a8693a', 'Bronze'] }[rank];
+  if (!c) return '';
+  return `<svg class="news-medal" viewBox="0 0 32 40" width="32" height="40" role="img" aria-label="${c[2]} medal">
+    <title>${c[2]} medal</title>
+    <path d="M8 0h6l4 14h-6z" fill="#c0392b"/><path d="M24 0h-6l-4 14h6z" fill="#2c6fbb"/>
+    <circle cx="16" cy="26" r="12" fill="${c[0]}" stroke="${c[1]}" stroke-width="2.5"/>
+    <circle cx="16" cy="26" r="8" fill="none" stroke="${c[1]}" stroke-width="1" opacity="0.7"/>
+    <text x="16" y="31" text-anchor="middle" font-size="14" font-weight="700" font-family="sans-serif" fill="${c[1]}">${rank}</text></svg>`;
+}
+
+function renderNews() {
+  const el = document.getElementById('news-list');
+  if (!el) return;
+  const news = state.news || [];
+  el.innerHTML = news.length ? news.map(n => {
+    const result = n.finished ? `finished in ${fmtTime(n.time)}` :
+      n.status === 'wrecked' ? `crashed after ${fmtKm(n.distance)}` :
+      n.status === 'fuel' ? `ran out of fuel after ${fmtKm(n.distance)}` : `got ${fmtKm(n.distance)}`;
+    const place = !n.old_rank ? `into place ${n.rank}` : n.old_rank === n.rank ? `a better run, still place ${n.rank}` : `up from place ${n.old_rank} to place ${n.rank}`;
+    const passed = n.passed.length ? ` Passed ${n.passed.map(esc).join(', ')}.` : '';
+    const taunt = n.taunt ? `<div class="news-taunt">&ldquo;${esc(n.taunt.text)}&rdquo; <span class="hint">to ${n.taunt.to.map(esc).join(', ')}</span></div>` : '';
+    return `<div class="news ${newsClass(n)}">
+      ${medalIconHTML(n.rank)}
+      <div class="news-body"><div><b>${esc(n.driver)}</b> with ${esc(n.car_name)} on <b>${esc(n.track_name || n.track)}</b> ${result}, ${place}.${passed}</div>
+      ${taunt}<div class="hint">${new Date(n.date * 1000).toLocaleString()}</div></div></div>`;
+  }).join('') : '<p class="hint">No news yet.</p>';
 }
 
 startSession();
