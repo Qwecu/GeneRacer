@@ -7,7 +7,8 @@
 
 const PLAYER_COLORS = ['#e74c3c', '#3498db', '#2ecc71', '#f1c40f', '#9b59b6', '#e67e22'];
 const CONTROLS = ['up', 'down', 'left', 'right'];
-const KEYMAP = { ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right' };
+const KEYMAP = { arrowup: 'up', arrowdown: 'down', arrowleft: 'left', arrowright: 'right',
+                 w: 'up', s: 'down', a: 'left', d: 'right' };   // arrows and WASD
 // Separate genes for how fast each control reacts when pressed, and when released.
 const DELAY_KEY = { up: 'react_forward', down: 'react_back', left: 'react_left', right: 'react_right' };
 const RELEASE_KEY = { up: 'release_forward', down: 'release_back', left: 'release_left', right: 'release_right' };
@@ -512,9 +513,14 @@ class RaceSession {
 
   onKey(ev) {
     const down = ev.type === 'keydown';
-    if (KEYMAP[ev.key]) {
+    const key = ev.key.toLowerCase(), dir = KEYMAP[key];
+    if (dir) {
       ev.preventDefault();
-      if (this.run) this.run.setInput(KEYMAP[ev.key], down);
+      // a direction stays on while any of its keys (say W and the up arrow) is held
+      const held = this._held || (this._held = {});
+      const set = held[dir] || (held[dir] = new Set());
+      if (down) set.add(key); else set.delete(key);
+      if (this.run) this.run.setInput(dir, set.size > 0);
       return;
     }
     if (!down) return;

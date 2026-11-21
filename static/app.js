@@ -88,7 +88,10 @@ function bindAuthForm(id, path) {
       storeToken(res.token);
       form.reset();
       await startSession();
-    } catch (e) { err.textContent = e.message; }
+    } catch (e) {
+      err.textContent = path === '/api/login' && e.message.startsWith('Wrong')
+        ? e.message + '. Elsa can reset your password if needed.' : e.message;
+    }
   };
 }
 bindAuthForm('login-form', '/api/login');
