@@ -317,3 +317,8 @@ nav button.play-tab.active { background: #ffd23f; color: #3a2e00; border-color: 
 /* ---------- retired cars: greyer background everywhere ---------- */
 .car-card.retired, .car-detail.retired { background: #d6d5d1; }
 table tr.retired td { background: #e4e3df; }
+
+/* ---------- info page ---------- */
+table.info-genes { font-size: 0.85rem; max-width: 1000px; }
+table.info-genes td, table.info-genes th { padding: 6px 8px; vertical-align: top; }
+table.info-genes td:first-child { font-weight: 600; white-space: nowrap; }

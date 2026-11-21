@@ -18,6 +18,7 @@
       <button data-tab="records">Hall of fame</button>
       <button data-tab="news">News</button>
       <button data-tab="ideas">Game improvement</button>
+      <button data-tab="info">Info</button>
       <button data-tab="banned" class="admin-only">Banned users</button>
     </nav>
     <div class="profile-bar">
@@ -158,6 +159,33 @@
         <button class="primary" id="btn-suggest">Send suggestion</button>
       </div>
       <div id="ideas-list"></div>
+    </section>
+
+    <!-- INFO -->
+    <section id="tab-info" class="tab">
+      <h2>Info</h2>
+      <h3>Genes</h3>
+      <p class="hint">41 loci, each expressed in one of four ways: <code>dominant</code> (the allele with higher dominance wins), <code>avg</code> (additive), <code>low</code> (the weaker allele wins), <code>high</code> (one strong allele is enough).</p>
+      <table class="genes info-genes">
+        <thead><tr><th>Trait</th><th>Genes</th><th>Notes</th></tr></thead>
+        <tbody>
+          <tr><td>Looks</td><td>length, width, hue, saturation, lightness, stripes, stripe hue, spoiler, wheels, cabin, headlight colour</td><td>Body size also affects weight and durability</td></tr>
+          <tr><td>Weight</td><td>chassis mass, armour, body size</td><td>Fuel adds 0.75 kg/L at run time</td></tr>
+          <tr><td>Durability</td><td>armour, body size</td><td>Wall impacts cost HP</td></tr>
+          <tr><td>Engine power (acceleration)</td><td>engine A (avg) + engine B (dominant)</td><td>Linked: adjacent on the chromosome</td></tr>
+          <tr><td>Top speed</td><td>top speed A (avg) + B (high)</td><td></td></tr>
+          <tr><td>Headlights</td><td>strength (high)</td><td>How far you see on night tracks</td></tr>
+          <tr><td>Friction</td><td>tyre grip (dry), tyre compound (share kept in the wet)</td><td>Limits acceleration, braking and cornering</td></tr>
+          <tr><td>Steering</td><td>steer left, steer right (separate)</td><td>60-260 deg/s: from sluggish to twitchy</td></tr>
+          <tr><td>Forward / back</td><td>engine power; back power (brake and reverse)</td><td>Brakes 150-1100. Brakes stronger than the tyres can hold lock the wheels: the car slides, stops on tyre grip alone and barely steers ("WHEELS LOCKED")</td></tr>
+          <tr><td>Reflexes</td><td>forward, back, left, right (separate)</td><td>Delay after pressing a key, 0-600 ms per key</td></tr>
+          <tr><td>Let-go</td><td>let-go forward, back, left, right (separate)</td><td>Delay after releasing a key, 0-700 ms per key: the car keeps turning or braking that long</td></tr>
+          <tr><td>Fuel</td><td>tank size (dominant, 12-90 L), efficiency (avg, 0.5-1.6)</td><td>Wide range on purpose</td></tr>
+          <tr><td>Drag</td><td>drag</td><td>Speed lost when coasting</td></tr>
+          <tr><td>Lifespan</td><td>lifespan A (low-dominant) + B (avg)</td><td>20-200 km</td></tr>
+          <tr><td>Sound</td><td>engine note, engine timbre, cylinders, gulp pitch, gulp rhythm</td><td>Cosmetic, heard in races and the garage</td></tr>
+        </tbody>
+      </table>
     </section>
   </main>
 
