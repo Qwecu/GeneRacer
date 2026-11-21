@@ -36,8 +36,6 @@ MAX_RUN_KM = 50     # one race run, as sent to add_distance
 STATUSES = {"finished", "fuel", "wrecked", "worn", "gaveup", "stalled"}
 TRACK_KEY = re.compile(r"^[A-Za-z0-9_.-]{1,70}\.v\d{1,4}$")   # recordKey(): <track id>.v<version>
 GHOST_PLACES = 10  # only the top places keep their ghost (they are large)
-PROFILE_COLORS = ["#e74c3c", "#3498db", "#2ecc71", "#f1c40f", "#9b59b6", "#e67e22",
-                  "#1abc9c", "#e84393", "#34495e", "#a0522d"]
 
 _ADJ = [
     # the originals
@@ -163,8 +161,7 @@ class Garage:
         raise KeyError(f"No car {car_id}")
 
     def _new_profile(self, name, starters=True):
-        used = {p["color"] for p in self.profiles}
-        color = next((c for c in PROFILE_COLORS if c not in used), random.choice(PROFILE_COLORS))
+        color = "#%06x" % random.randrange(0x1000000)     # any RGB value
         profile = {"id": uuid.uuid4().hex[:8], "name": name, "color": color, "created": time.time()}
         self.profiles.append(profile)
         if starters:
