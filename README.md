@@ -9,7 +9,16 @@ crossover per parent, and a small mutation rate.
 ```
 py server.py            # opens http://localhost:2793
 py server.py --no-browser
+py server.py --public   # listen on all network interfaces, for other computers
 ```
+
+By default the server only accepts connections from the same computer, so other
+machines get "connection refused". With `--public`, open
+`http://<host IP or name>:2793` from another computer. On Windows, allow the
+port through the firewall once (admin PowerShell):
+`New-NetFirewallRule -DisplayName GeneRacer -Direction Inbound -Protocol TCP -LocalPort 2793 -Action Allow`.
+Behind a reverse proxy or hosting platform, the app must run with `--public`
+and the platform must route to port 2793.
 
 Python 3 standard library only. Players, cars, tracks, records and logins are
 saved in `data/`. Delete that folder to start over. To use a different save folder, set the

@@ -291,8 +291,11 @@ class Server(ThreadingHTTPServer):
 
 
 if __name__ == "__main__":
+    # Default is this machine only.  --public listens on all network interfaces
+    # so other computers can connect (also allow the port in the firewall).
+    HOST = "0.0.0.0" if "--public" in sys.argv else "localhost"
     try:
-        server = Server(("localhost", PORT), Handler)
+        server = Server((HOST, PORT), Handler)
     except OSError:
         print(f"Port {PORT} is already in use: is Make No Mistakes! already running? "
               f"Open http://localhost:{PORT} or stop the other server first.")
@@ -302,6 +305,8 @@ if __name__ == "__main__":
         print(f"Created the admin account.  Username: {ADMIN_NAME}  Password: {accounts.new_admin_password}")
         print(f"(Also saved in {ADMIN_FILE}.  Change it in the game; the file is then deleted.)")
     print(f"Make No Mistakes! running at {url}  (Ctrl+C to stop)")
+    if HOST != "localhost":
+        print(f"Public: other computers can use http://<this computer's IP or name>:{PORT}")
     if "--no-browser" not in sys.argv:
         webbrowser.open(url)
     try:
