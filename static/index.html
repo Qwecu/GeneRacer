@@ -17,6 +17,7 @@
       <button data-tab="trial">Time trial</button>
       <button data-tab="records">Hall of fame</button>
       <button data-tab="news">News</button>
+      <button data-tab="banned" class="admin-only">Banned users</button>
     </nav>
     <div class="profile-bar">
       <span class="swatch" id="profile-swatch"></span>
@@ -131,6 +132,13 @@
       <p class="hint">The 100 best time-trial runs on each track, shared by all players. The top 10 keep their ghosts. Each player and car can hold one place; a new run replaces it only if it is better. Finishers rank by time, everyone else by distance.</p>
       <div id="records-table"></div>
     </section>
+    <!-- BANNED USERS (admin) -->
+    <section id="tab-banned" class="tab">
+      <h2>Banned users</h2>
+      <p class="hint">Players the server caught sending a forged result. They are logged out and cannot log in until unbanned.</p>
+      <div id="banned-list"></div>
+    </section>
+
     <!-- NEWS -->
     <section id="tab-news" class="tab">
       <h2>News</h2>

@@ -7,7 +7,7 @@ crossover per parent, and a small mutation rate.
 ## Run
 
 ```
-py server.py            # opens http://localhost:8766
+py server.py            # opens http://localhost:2793
 py server.py --no-browser
 ```
 

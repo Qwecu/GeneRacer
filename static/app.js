@@ -32,6 +32,7 @@ async function api(path, body) {
   const res = await fetch(path, opts);
   const data = await res.json();
   if (res.status === 401 && path !== '/api/login') { showLogin(); throw new Error(data.error); }
+  if (res.status === 403 && data.banned) { showLogin(); alert(data.error); throw new Error(data.error); }
   if (!res.ok) throw new Error(data.error || res.statusText);
   return data;
 }
@@ -182,6 +183,7 @@ async function loadAll() {
   state.records = await api('/api/records');
   state.tracks = await api('/api/tracks');
   state.news = await api('/api/news');
+  state.banned = state.session.admin ? await api('/api/banned') : [];
   state.raceTrack = validSelection(state.raceTrack, 'race');
   state.trialTrack = validSelection(state.trialTrack, 'trial');
   state.breedPick = state.breedPick.filter(id => carById(id));
@@ -208,9 +210,10 @@ function unlocked(profileId) {
 
 function renderAll() {
   renderProfileBar();
+  renderBanned();
   const noPlayer = !me();
   document.getElementById('no-player').classList.toggle('hidden', !noPlayer);
-  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('blocked', noPlayer));
+  document.querySelectorAll('.tab:not(#tab-banned)').forEach(t => t.classList.toggle('blocked', noPlayer));
   if (noPlayer) return;
   computePoints();
   renderGarage();
@@ -1016,6 +1019,21 @@ function newsClass(n) {
   if (n.status === 'wrecked') return 'crash';
   if (n.status === 'fuel') return 'fuel';
   return '';
+}
+
+// Banned users (admin only): one row per banned player with an Unban button.
+function renderBanned() {
+  const el = document.getElementById('banned-list');
+  if (!el) return;
+  const banned = state.banned || [];
+  el.innerHTML = banned.length ? `<table class="records">${banned.map(b => `
+    <tr><td><b>${esc(b.name)}</b></td><td class="hint">${esc(b.reason)}</td>
+      <td class="hint">${new Date(b.date * 1000).toLocaleString()}</td>
+      <td><button class="small unban-btn" data-id="${esc(b.id)}">Unban</button></td></tr>`).join('')}</table>`
+    : '<p class="hint">Nobody is banned.</p>';
+  el.querySelectorAll('.unban-btn').forEach(btn => btn.onclick = async () => {
+    try { await api('/api/unban', { id: btn.dataset.id }); await loadAll(); } catch (e) { alert(e.message); }
+  });
 }
 
 // Medal icon for a new 1st, 2nd or 3rd place.

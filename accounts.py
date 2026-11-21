@@ -51,6 +51,7 @@ class Accounts:
         self.data = _load(AUTH_FILE, {})
         self.data.setdefault("passwords", {})       # profile id -> hash
         self.data.setdefault("sessions", {})        # token -> {user, expires}
+        self.data.setdefault("banned", {})          # profile id -> {name, reason, date}
         self.new_admin_password = None
         if "admin" not in self.data:
             password = os.environ.get("GENERACER_ADMIN_PASSWORD")
@@ -85,6 +86,8 @@ class Accounts:
             return None
         if s["user"] == ADMIN_NAME:
             return {"admin": True, "profile_id": None}
+        if s["user"] in self.data["banned"]:
+            return None
         try:
             self.garage._profile(s["user"])
         except KeyError:
@@ -103,6 +106,8 @@ class Accounts:
             profile = next((p for p in self.garage.profiles if p["name"] == name), None)
             if profile is None:
                 raise ValueError("Wrong username or password")
+            if profile["id"] in self.data["banned"]:
+                raise ValueError("This account is banned for forged results. Elsa can unban it.")
             stored = self.data["passwords"].get(profile["id"])
             if stored is None:
                 raise ValueError(f"{name} has no password yet. The admin can set one.")
@@ -145,8 +150,39 @@ class Accounts:
         """After a profile is deleted: drop its password and log it out everywhere."""
         with self.lock:
             self.data["passwords"].pop(profile_id, None)
+            self.data["banned"].pop(profile_id, None)
             self.data["sessions"] = {t: s for t, s in self.data["sessions"].items() if s["user"] != profile_id}
             self._save()
+
+    def ban(self, profile_id, reason):
+        """Logs the player out everywhere and refuses their logins until unban()."""
+        with self.lock:
+            if profile_id in self.data["banned"]:
+                return
+            try:
+                name = self.garage._profile(profile_id)["name"]
+            except KeyError:
+                name = "?"
+            self.data["banned"][profile_id] = {"name": name, "reason": str(reason)[:200], "date": time.time()}
+            self.data["sessions"] = {t: s for t, s in self.data["sessions"].items() if s["user"] != profile_id}
+            self._save()
+
+    def unban(self, profile_id):
+        with self.lock:
+            if self.data["banned"].pop(profile_id, None) is None:
+                raise KeyError("That player is not banned")
+            self._save()
+
+    def banned_list(self):
+        """Newest ban first, with the player's current name when they still exist."""
+        out = []
+        for pid, b in self.data["banned"].items():
+            try:
+                name = self.garage._profile(pid)["name"]
+            except KeyError:
+                name = b["name"]
+            out.append({"id": pid, "name": name, "reason": b["reason"], "date": b["date"]})
+        return sorted(out, key=lambda b: -b["date"])
 
     def has_password(self, profile_id):
         return profile_id in self.data["passwords"]

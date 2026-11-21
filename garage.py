@@ -4,7 +4,9 @@ Every car has an `owner`: the id of the profile it belongs to.
 """
 
 import json
+import math
 import os
+import re
 import random
 import threading
 import time
@@ -28,6 +30,11 @@ HALL_SIZE = 100    # places saved in each track's time-trial hall of fame
 TAUNT_LENGTH = 140  # characters in one taunt
 NEWS_KEPT = 100     # news posts saved
 TAUNTS_KEPT = 50    # taunts kept per recipient; the oldest read ones go first
+SPEED_SLACK = 1.3   # a run may average this much over the car's top speed (drifts, bounces)
+MAX_RUN_SECONDS = 3600
+MAX_RUN_KM = 50     # one race run, as sent to add_distance
+STATUSES = {"finished", "fuel", "wrecked", "worn", "gaveup", "stalled"}
+TRACK_KEY = re.compile(r"^[A-Za-z0-9_.-]{1,70}\.v\d{1,4}$")   # recordKey(): <track id>.v<version>
 GHOST_PLACES = 10  # only the top places keep their ghost (they are large)
 PROFILE_COLORS = ["#e74c3c", "#3498db", "#2ecc71", "#f1c40f", "#9b59b6", "#e67e22",
                   "#1abc9c", "#e84393", "#34495e", "#a0522d"]
@@ -93,6 +100,10 @@ _NOUN = [
 _lock = threading.Lock()
 
 
+class ForgeryError(ValueError):
+    """A submission that no honest client can produce; the server bans the sender."""
+
+
 def _random_name(existing):
     for _ in range(50):
         name = f"{random.choice(_ADJ)} {random.choice(_NOUN)}"
@@ -127,6 +138,7 @@ class Garage:
         # custom: saved seed-generated track definitions; hidden: ids of built-in tracks the admin removed
         self.tracks = _load(TRACKS_FILE, {"custom": [], "hidden": []})
         self.profiles = _load(PROFILES_FILE, [])
+        self._last_run = {}    # profile id -> (time of last accepted submission, its run seconds)
         self._pending = {}     # (profile id, track key) -> {"to": profile ids below the car, "news": post id}
         self.news = _load(NEWS_FILE, [])         # oldest first, last NEWS_KEPT kept
         self.taunts = _load(TAUNTS_FILE, [])     # [{id, from, to, track, track_name, text, date, read}]
@@ -313,6 +325,9 @@ class Garage:
         """entries: [{id, km}] driven in a finished race run."""
         with _lock:
             for e in entries:
+                if not math.isfinite(float(e["km"])) or float(e["km"]) > MAX_RUN_KM:
+                    raise ForgeryError("Impossible distance")
+            for e in entries:
                 try:
                     car = self._find(e["id"])
                 except KeyError:
@@ -354,6 +369,8 @@ class Garage:
         "surpassed" lists the other players with a place below this car's new
         place anywhere in the hall of fame (they can be taunted).
         """
+        if not isinstance(track_id, str) or not TRACK_KEY.match(track_id):
+            raise ForgeryError("Unknown track")
         rec = {
             "finished": bool(rec["finished"]),
             "time": float(rec["time"]),
@@ -362,14 +379,22 @@ class Garage:
             "car_id": str(rec.get("car_id", ""))[:20],
             "driver": str(rec.get("driver", "?"))[:40],
             "profile_id": str(rec.get("profile_id", ""))[:20],
-            "ghost": rec.get("ghost", [])[:6000],
+            "ghost": rec.get("ghost", []),
             "looks": rec.get("looks", {}),
             "date": time.time(),
         }
+        if isinstance(extra, dict) and extra.get("status") not in STATUSES:
+            extra = {**extra, "status": ""}
         if not rec["finished"] and rec["distance"] <= 0:
             return {"rank": None, "best_rank": None, "surpassed": []}
+        self._check_run(rec)
         mine = lambda e: rec["profile_id"] and e.get("profile_id") == rec["profile_id"] and e.get("car_id") == rec["car_id"]
         with _lock:
+            last = self._last_run.get(rec["profile_id"])
+            if last and rec["date"] - last[0] < 0.9 * rec["time"]:
+                # a run takes `time` seconds to drive, so runs cannot arrive faster
+                raise ValueError("That run came in too soon after the previous one")
+            self._last_run[rec["profile_id"]] = (rec["date"], rec["time"])
             hall = list(self.hall(track_id))
             previous = next((e for e in hall if mine(e)), None)
             old = list(hall)
@@ -393,6 +418,45 @@ class Garage:
             if surpassed:
                 self._pending[(rec["profile_id"], track_id)] = {"to": [p["id"] for p in surpassed], "news": news_id}
             return {"rank": rank, "best_rank": rank, "surpassed": surpassed}
+
+    def _check_run(self, rec):
+        """
+        Rejects runs that cannot have been driven.  The server does not
+        replay runs, so this only catches crude forgeries: bad numbers, a car
+        faster than its top speed, a retired car, a ghost that does not fit
+        the time or teleports.
+        """
+        t, d = rec["time"], rec["distance"]
+        if not (math.isfinite(t) and math.isfinite(d)) or not (0 < t <= MAX_RUN_SECONDS) or d < 0:
+            raise ForgeryError("Impossible run time or distance")
+        car = self._find(rec["car_id"])
+        _, stats, _ = express_car(CarGenome.from_dict(car["genome"]))
+        if car["odometer_km"] >= stats["lifespan_km"]:
+            raise ValueError("That car is retired")
+        vmax = stats["max_speed_px"]
+        if d > vmax * SPEED_SLACK * t + 50:
+            raise ForgeryError("That car cannot go that fast")
+        looks = rec["looks"]
+        if not isinstance(looks, dict) or len(json.dumps(looks)) > 2000:
+            rec["looks"] = {}
+        ghost = rec["ghost"]
+        if not isinstance(ghost, list):
+            ghost = []
+        ghost = ghost[:6000]
+        ok = len(ghost) <= 3 or t > 600 or abs(len(ghost) - t * 10) <= 5     # one point every 0.1 s
+        prev = None
+        for p in ghost:
+            if (not isinstance(p, list) or len(p) != 3 or
+                    not all(isinstance(v, (int, float)) and math.isfinite(v) for v in p)):
+                ok = False
+                break
+            if prev is not None and math.hypot(p[0] - prev[0], p[1] - prev[1]) > 3 * vmax * 0.1 + 5:
+                ok = False
+                break
+            prev = p
+        if not ok:
+            raise ForgeryError("The recorded ghost does not match the run")
+        rec["ghost"] = ghost
 
     def _post_news(self, old, hall, rec, previous, rank, old_rank, track_id, extra):
         """One news post for a run that changed hall of fame positions."""

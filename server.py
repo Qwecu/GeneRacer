@@ -1,5 +1,5 @@
 """
-Make No Mistakes! server.  Run:  py server.py   (then open http://localhost:8766)
+Make No Mistakes! server.  Run:  py server.py   (then open http://localhost:2793)
 
 Serves the static front end from ./static and a small JSON API backed by
 garage.py.  Standard library only.
@@ -16,10 +16,11 @@ import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from accounts import ADMIN_FILE, ADMIN_NAME, Accounts
-from garage import MAX_CARS, Garage
+from garage import MAX_CARS, ForgeryError, Garage
 from traits import trait_info_json
 
-PORT = 8766
+PORT = 2793
+MAX_BODY = 1_000_000     # bytes; a ghost is about 200 kB
 STATIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
 CONTENT_TYPES = {
     ".html": "text/html; charset=utf-8",
@@ -81,6 +82,9 @@ class Handler(BaseHTTPRequestHandler):
             if path == "/api/profiles":
                 return self._json([{**p, "has_password": accounts.has_password(p["id"])}
                                    for p in garage.list_profiles()])
+            if path == "/api/banned":
+                self._admin(who)
+                return self._json(accounts.banned_list())
             if path == "/api/news":
                 return self._json(garage.news_list())
             if path == "/api/taunts":
@@ -102,6 +106,8 @@ class Handler(BaseHTTPRequestHandler):
             self._respond(404, "text/plain", b"Not found")
         except LoggedOut:
             self._json({"error": "Please log in"}, code=401)
+        except Forbidden as exc:
+            self._json({"error": str(exc)}, code=403)
 
     def _static(self, path):
         if path == "/":
@@ -118,12 +124,22 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         try:
             length = int(self.headers.get("Content-Length", 0))
+            if not 0 <= length <= MAX_BODY:
+                return self._json({"error": "Request too large"}, code=413)
             body = json.loads(self.rfile.read(length) or b"{}")
             self._post(self.path, body)
         except LoggedOut:
             self._json({"error": "Please log in"}, code=401)
         except Forbidden as exc:
             self._json({"error": str(exc)}, code=403)
+        except ForgeryError as exc:
+            # reached only from player submissions: ban the sender (never the admin)
+            who = accounts.session(self._token())
+            if who and not who["admin"]:
+                accounts.ban(who["profile_id"], str(exc))
+                return self._json({"error": "Forged result detected. You are banned until Elsa unbans you.",
+                                   "banned": True}, code=403)
+            self._json({"error": str(exc)}, code=400)
         except (KeyError, ValueError, TypeError) as exc:
             self._json({"error": str(exc)}, code=400)
 
@@ -173,6 +189,12 @@ class Handler(BaseHTTPRequestHandler):
                 garage.mark_taunts_read(who["profile_id"])
             return ok()
 
+        # ---- bans ----
+        if path == "/api/unban":
+            self._admin(who)
+            accounts.unban(body["id"])
+            return ok()
+
         # ---- accounts ----
         if path == "/api/profiles/create":
             self._admin(who)
@@ -219,6 +241,9 @@ class Handler(BaseHTTPRequestHandler):
             return ok()
         if path == "/api/record":
             rec = body["record"]
+            if not who["admin"] and (rec.get("profile_id") != who["profile_id"] or
+                                     garage.owner_of(rec.get("car_id")) != rec.get("profile_id")):
+                raise ForgeryError("A run was submitted for another player or car")
             self._may(who, rec.get("profile_id"))
             if garage.owner_of(rec.get("car_id")) != rec.get("profile_id"):
                 raise Forbidden("That car belongs to another player")
