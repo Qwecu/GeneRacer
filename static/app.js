@@ -88,27 +88,7 @@ function bindAuthForm(id, path) {
       const res = await api(path, { name, password });
       storeToken(res.token);
       form.reset();
-      await function renderIdeas() {
-  const el = document.getElementById('ideas-list');
-  const list = state.suggestions || [];
-  const mine = state.session.profile_id;
-  el.innerHTML = list.length ? list.map(s => `<div class="news idea">
-      <div class="news-body"><div class="idea-text">${esc(s.text)}</div>
-      <div class="hint">${esc(s.name)} &middot; ${new Date(s.date * 1000).toLocaleString()}</div></div>
-      ${state.session.admin || s.from === mine ? `<button class="small" data-del="${esc(s.id)}">Delete</button>` : ''}
-    </div>`).join('') : '<p class="hint">No suggestions yet.</p>';
-  el.querySelectorAll('[data-del]').forEach(b => b.onclick = async () => {
-    if (!confirm('Delete this suggestion?')) return;
-    try { await api('/api/suggest/delete', { id: b.dataset.del }); await loadAll(); } catch (e) { alert(e.message); }
-  });
-}
-document.getElementById('btn-suggest').onclick = async () => {
-  const box = document.getElementById('idea-text');
-  if (!box.value.trim()) return;
-  try { await api('/api/suggest', { text: box.value }); box.value = ''; await loadAll(); } catch (e) { alert(e.message); }
-};
-
-startSession();
+      await startSession();
     } catch (e) {
       err.textContent = path === '/api/login' && e.message.startsWith('Wrong')
         ? e.message + '. Elsa can reset your password if needed.' : e.message;
@@ -1160,5 +1140,25 @@ function renderNews() {
       ${taunt}<div class="hint">${new Date(n.date * 1000).toLocaleString()}</div></div></div>`;
   }).join('') : '<p class="hint">No news yet.</p>';
 }
+
+function renderIdeas() {
+  const el = document.getElementById('ideas-list');
+  const list = state.suggestions || [];
+  const mine = state.session.profile_id;
+  el.innerHTML = list.length ? list.map(s => `<div class="news idea">
+      <div class="news-body"><div class="idea-text">${esc(s.text)}</div>
+      <div class="hint">${esc(s.name)} &middot; ${new Date(s.date * 1000).toLocaleString()}</div></div>
+      ${state.session.admin || s.from === mine ? `<button class="small" data-del="${esc(s.id)}">Delete</button>` : ''}
+    </div>`).join('') : '<p class="hint">No suggestions yet.</p>';
+  el.querySelectorAll('[data-del]').forEach(b => b.onclick = async () => {
+    if (!confirm('Delete this suggestion?')) return;
+    try { await api('/api/suggest/delete', { id: b.dataset.del }); await loadAll(); } catch (e) { alert(e.message); }
+  });
+}
+document.getElementById('btn-suggest').onclick = async () => {
+  const box = document.getElementById('idea-text');
+  if (!box.value.trim()) return;
+  try { await api('/api/suggest', { text: box.value }); box.value = ''; await loadAll(); } catch (e) { alert(e.message); }
+};
 
 startSession();
