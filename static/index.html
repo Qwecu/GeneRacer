@@ -17,6 +17,7 @@
       <button data-tab="trial" class="play-tab">PLAY</button>
       <button data-tab="records">Hall of fame</button>
       <button data-tab="news">News</button>
+      <button data-tab="ideas">Game improvement</button>
       <button data-tab="banned" class="admin-only">Banned users</button>
     </nav>
     <div class="profile-bar">
@@ -145,6 +146,17 @@
       <h2>News</h2>
       <p class="hint">Time trial runs that changed the hall of fame, and the taunts that came with them. The last 100 posts, newest first.</p>
       <div id="news-list"></div>
+    </section>
+
+    <!-- GAME IMPROVEMENT -->
+    <section id="tab-ideas" class="tab">
+      <h2>Game improvement</h2>
+      <p class="hint">Suggest how to make the game better. Everybody can read the suggestions here, newest first.</p>
+      <div class="note-box">
+        <textarea id="idea-text" maxlength="1000" rows="3" placeholder="Your suggestion"></textarea>
+        <button class="primary" id="btn-suggest">Send suggestion</button>
+      </div>
+      <div id="ideas-list"></div>
     </section>
   </main>
 

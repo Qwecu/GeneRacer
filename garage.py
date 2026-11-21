@@ -23,11 +23,15 @@ TRACKS_FILE = os.path.join(DATA_DIR, "tracks.json")
 PROFILES_FILE = os.path.join(DATA_DIR, "profiles.json")
 TAUNTS_FILE = os.path.join(DATA_DIR, "taunts.json")
 NEWS_FILE = os.path.join(DATA_DIR, "news.json")
+SUGGESTIONS_FILE = os.path.join(DATA_DIR, "suggestions.json")
 
 STARTER_CARS = 6
 MAX_CARS = 20      # drivable cars one player may own; retired cars do not count
 HALL_SIZE = 100    # places saved in each track's time-trial hall of fame
 TAUNT_LENGTH = 140  # characters in one taunt
+NOTE_LENGTH = 500   # characters in a car's note
+SUGGESTION_LENGTH = 1000   # characters in one game improvement suggestion
+SUGGESTIONS_KEPT = 500
 NEWS_KEPT = 100     # news posts saved
 TAUNTS_KEPT = 50    # taunts kept per recipient; the oldest read ones go first
 SPEED_SLACK = 1.3   # a run may average this much over the car's top speed (drifts, bounces)
@@ -139,6 +143,7 @@ class Garage:
         self._last_run = {}    # profile id -> (time of last accepted submission, its run seconds)
         self._pending = {}     # (profile id, track key) -> {"to": profile ids below the car, "news": post id}
         self.news = _load(NEWS_FILE, [])         # oldest first, last NEWS_KEPT kept
+        self.suggestions = _load(SUGGESTIONS_FILE, [])   # [{id, from, name, text, date}], oldest first
         self.taunts = _load(TAUNTS_FILE, [])     # [{id, from, to, track, track_name, text, date, read}]
         if not self.profiles and self.cars:
             # Data from before profiles existed: everything already in the
@@ -217,6 +222,7 @@ class Garage:
             "parents": car["parents"],
             "odometer_km": round(car["odometer_km"], 2),
             "races": car.get("races", 0),
+            "note": car.get("note", ""),
             "retired": car["odometer_km"] >= stats["lifespan_km"],
             "looks": looks,
             "stats": stats,
@@ -317,6 +323,23 @@ class Garage:
         with _lock:
             self._find(car_id)["name"] = name
             self._persist()
+
+    def set_note(self, car_id, note):
+        if not isinstance(note, str):
+            raise ValueError("Bad note")
+        with _lock:
+            self._find(car_id)["note"] = note.strip()[:NOTE_LENGTH]
+            self._persist()
+
+    def set_order(self, owner, car_ids):
+        """Saves the order the player arranged their cars in (the garage shows it as is)."""
+        if not isinstance(car_ids, list) or not all(isinstance(i, str) for i in car_ids):
+            raise ValueError("Bad order")
+        with _lock:
+            profile = self._profile(owner)
+            mine = {c["id"] for c in self.cars if c.get("owner") == owner}
+            profile["order"] = [i for i in dict.fromkeys(car_ids) if i in mine]
+            _save(PROFILES_FILE, self.profiles)
 
     def add_distance(self, entries):
         """entries: [{id, km}] driven in a finished race run."""
@@ -484,6 +507,34 @@ class Garage:
         names = {p["id"]: p["name"] for p in self.profiles}
         pids = dict.fromkeys(e.get("profile_id") for e in hall[mine_new + 1:])
         return [{"id": pid, "name": names[pid]} for pid in pids if pid != rec["profile_id"] and pid in names]
+
+    # ---------------- suggestions ----------------
+
+    def add_suggestion(self, profile_id, name, text):
+        text = str(text).strip()[:SUGGESTION_LENGTH]
+        if not text:
+            raise ValueError("The suggestion is empty")
+        with _lock:
+            self.suggestions.append({"id": uuid.uuid4().hex[:10], "from": profile_id, "name": name,
+                                     "text": text, "date": time.time()})
+            del self.suggestions[:-SUGGESTIONS_KEPT]
+            _save(SUGGESTIONS_FILE, self.suggestions)
+
+    def suggestions_list(self):
+        """Newest first, with the author's current name when they still exist."""
+        names = {p["id"]: p["name"] for p in self.profiles}
+        return [{**s, "name": names.get(s["from"], s["name"])} for s in reversed(self.suggestions)]
+
+    def delete_suggestion(self, suggestion_id, profile_id, admin):
+        """Its author or the admin removes a suggestion."""
+        with _lock:
+            s = next((s for s in self.suggestions if s["id"] == suggestion_id), None)
+            if s is None:
+                raise KeyError("No such suggestion")
+            if not admin and s["from"] != profile_id:
+                raise PermissionError("You can only delete your own suggestions")
+            self.suggestions.remove(s)
+            _save(SUGGESTIONS_FILE, self.suggestions)
 
     # ---------------- taunts ----------------
 

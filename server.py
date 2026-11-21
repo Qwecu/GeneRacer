@@ -88,6 +88,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json(accounts.banned_list())
             if path == "/api/news":
                 return self._json(garage.news_list())
+            if path == "/api/suggestions":
+                return self._json(garage.suggestions_list())
             if path == "/api/taunts":
                 # taunts other players sent the logged-in player (the admin gets none)
                 return self._json([] if who["admin"] else garage.taunts_for(who["profile_id"]))
@@ -177,6 +179,27 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/rename":
             self._may(who, garage.owner_of(body["id"]))
             garage.rename(body["id"], body["name"])
+            return ok()
+
+        if path == "/api/note":
+            self._may(who, garage.owner_of(body["id"]))
+            garage.set_note(body["id"], body["note"])
+            return ok()
+        if path == "/api/reorder":
+            self._may(who, body["owner"])
+            garage.set_order(body["owner"], body["ids"])
+            return ok()
+
+        # ---- game improvement suggestions (everybody can read them) ----
+        if path == "/api/suggest":
+            name = ADMIN_NAME if who["admin"] else garage._profile(who["profile_id"])["name"]
+            garage.add_suggestion(who["profile_id"], name, body["text"])
+            return ok()
+        if path == "/api/suggest/delete":
+            try:
+                garage.delete_suggestion(body["id"], who["profile_id"], who["admin"])
+            except PermissionError as exc:
+                raise Forbidden(str(exc))
             return ok()
 
         # ---- taunts ----

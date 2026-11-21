@@ -300,3 +300,20 @@ body.is-admin .player-only { display: none; }
 
 nav button.play-tab { background: #ffd23f; color: #3a2e00; border-color: #d4a900; font-weight: 700; }
 nav button.play-tab.active { background: #ffd23f; color: #3a2e00; border-color: #3a2e00; box-shadow: 0 0 0 2px #3a2e00 inset; }
+
+/* ---------- car notes and drag & drop order ---------- */
+.car-card .card-note { font-size: 0.78rem; margin-top: 4px; padding: 3px 6px; background: #fff8d6; border-radius: 6px;
+  white-space: pre-wrap; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
+.car-card.dragging { opacity: 0.4; }
+.car-card.drop-before { box-shadow: -5px 0 0 0 var(--accent); }
+.car-card.drop-after { box-shadow: 5px 0 0 0 var(--accent); }
+.note-box { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; margin: 8px 0; }
+.note-box textarea { width: 100%; box-sizing: border-box; resize: vertical; font: inherit; }
+
+/* ---------- game improvement ---------- */
+.idea { display: flex; gap: 10px; align-items: flex-start; justify-content: space-between; }
+.idea .idea-text { white-space: pre-wrap; overflow-wrap: anywhere; }
+
+/* ---------- retired cars: greyer background everywhere ---------- */
+.car-card.retired, .car-detail.retired { background: #d6d5d1; }
+table tr.retired td { background: #e4e3df; }

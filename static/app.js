@@ -88,7 +88,27 @@ function bindAuthForm(id, path) {
       const res = await api(path, { name, password });
       storeToken(res.token);
       form.reset();
-      await startSession();
+      await function renderIdeas() {
+  const el = document.getElementById('ideas-list');
+  const list = state.suggestions || [];
+  const mine = state.session.profile_id;
+  el.innerHTML = list.length ? list.map(s => `<div class="news idea">
+      <div class="news-body"><div class="idea-text">${esc(s.text)}</div>
+      <div class="hint">${esc(s.name)} &middot; ${new Date(s.date * 1000).toLocaleString()}</div></div>
+      ${state.session.admin || s.from === mine ? `<button class="small" data-del="${esc(s.id)}">Delete</button>` : ''}
+    </div>`).join('') : '<p class="hint">No suggestions yet.</p>';
+  el.querySelectorAll('[data-del]').forEach(b => b.onclick = async () => {
+    if (!confirm('Delete this suggestion?')) return;
+    try { await api('/api/suggest/delete', { id: b.dataset.del }); await loadAll(); } catch (e) { alert(e.message); }
+  });
+}
+document.getElementById('btn-suggest').onclick = async () => {
+  const box = document.getElementById('idea-text');
+  if (!box.value.trim()) return;
+  try { await api('/api/suggest', { text: box.value }); box.value = ''; await loadAll(); } catch (e) { alert(e.message); }
+};
+
+startSession();
     } catch (e) {
       err.textContent = path === '/api/login' && e.message.startsWith('Wrong')
         ? e.message + '. Elsa can reset your password if needed.' : e.message;
@@ -183,6 +203,7 @@ async function loadAll() {
   state.records = await api('/api/records');
   state.tracks = await api('/api/tracks');
   state.news = await api('/api/news');
+  state.suggestions = await api('/api/suggestions');
   state.banned = state.session.admin ? await api('/api/banned') : [];
   state.raceTrack = validSelection(state.raceTrack, 'race');
   state.trialTrack = validSelection(state.trialTrack, 'trial');
@@ -221,6 +242,7 @@ function renderAll() {
   renderTrialSetup();
   renderRecords();
   renderNews();
+  renderIdeas();
 }
 
 // =====================================================================
@@ -334,9 +356,13 @@ function renderGarage() {
     if (!confirm(`Delete all ${retired.length} retired cars: ${retired.map(c => c.name).join(', ')}? This cannot be undone.`)) return;
     try { await api('/api/delete', { ids: retired.map(c => c.id) }); await loadAll(); } catch (e) { alert(e.message); }
   };
-  const sorted = [...carsOf(state.profileId)].sort((a, b) => (a.retired - b.retired) || (b.generation - a.generation));
+  const sorted = garageOrder(state.profileId);
   for (const car of sorted) {
     const card = document.createElement('div');
+    card.draggable = true;
+    card.dataset.id = car.id;
+    card.title = 'Drag to change the order';
+    bindCardDrag(card, car);
     card.className = 'car-card' +
       (state.breedPick.includes(car.id) ? ' selected' : '') +
       (state.viewing === car.id ? ' viewing' : '') +
@@ -355,7 +381,7 @@ function renderGarage() {
     card.insertAdjacentHTML('beforeend', `<div class="card-trophies">${trophyBadges(car)}</div>`);
     const lifeLeft = Math.max(0, 1 - car.odometer_km / car.stats.lifespan_km);
     card.insertAdjacentHTML('beforeend', `
-      <div class="name">${esc(car.name)}</div>
+      <div class="name">${esc(car.name)}</div>${car.note ? `<div class="card-note">${esc(car.note)}</div>` : ''}
       <div class="meta">Gen ${car.generation} &middot; ${car.stats.power} kW &middot; ${car.stats.max_speed} km/h
         ${car.retired ? '<span class="badge retired">retired</span>' : ''}</div>
       <div class="meta">${car.odometer_km.toFixed(1)} / ${car.stats.lifespan_km} km</div>
@@ -377,6 +403,56 @@ function renderGarage() {
   btn.textContent = `Breed selected (${state.breedPick.length}/2)`;
   btn.disabled = state.breedPick.length !== 2 || full;
   renderDetail();
+}
+
+// The player's own order if they dragged cars around (new cars first), else
+// drivable cars before retired ones, newest generation first.
+function garageOrder(profileId) {
+  const own = carsOf(profileId);
+  const order = profileById(profileId)?.order;
+  if (!order || !order.length) return [...own].sort((a, b) => (a.retired - b.retired) || (b.generation - a.generation));
+  const pos = new Map(order.map((id, i) => [id, i]));
+  const fresh = own.filter(c => !pos.has(c.id)).sort((a, b) => b.generation - a.generation);
+  const placed = own.filter(c => pos.has(c.id)).sort((a, b) => pos.get(a.id) - pos.get(b.id));
+  return [...fresh, ...placed];
+}
+
+let dragCarId = null;
+function bindCardDrag(card, car) {
+  card.addEventListener('dragstart', (ev) => {
+    dragCarId = car.id;
+    ev.dataTransfer.effectAllowed = 'move';
+    ev.dataTransfer.setData('text/plain', car.id);
+    card.classList.add('dragging');
+  });
+  card.addEventListener('dragend', () => {
+    dragCarId = null;
+    document.querySelectorAll('.car-card').forEach(c => c.classList.remove('dragging', 'drop-before', 'drop-after'));
+  });
+  card.addEventListener('dragover', (ev) => {
+    if (!dragCarId || dragCarId === car.id) return;
+    ev.preventDefault();
+    const r = card.getBoundingClientRect();
+    const after = ev.clientX > r.left + r.width / 2;
+    card.classList.toggle('drop-after', after);
+    card.classList.toggle('drop-before', !after);
+  });
+  card.addEventListener('dragleave', () => card.classList.remove('drop-before', 'drop-after'));
+  card.addEventListener('drop', async (ev) => {
+    ev.preventDefault();
+    if (!dragCarId || dragCarId === car.id) return;
+    const r = card.getBoundingClientRect();
+    const after = ev.clientX > r.left + r.width / 2;
+    const ids = garageOrder(state.profileId).map(c => c.id).filter(id => id !== dragCarId);
+    ids.splice(ids.indexOf(car.id) + (after ? 1 : 0), 0, dragCarId);
+    const profile = me();
+    const previous = profile.order;
+    profile.order = ids;
+    dragCarId = null;
+    renderGarage();
+    try { await api('/api/reorder', { owner: state.profileId, ids }); }
+    catch (e) { profile.order = previous; renderGarage(); alert(e.message); }
+  });
 }
 
 function toggleBreedPick(id) {
@@ -406,7 +482,7 @@ function renderDetail() {
     el.textContent = 'Select a car to see its stats and genes.';
     return;
   }
-  el.className = 'car-detail';
+  el.className = 'car-detail' + (car.retired ? ' retired' : '');
   const parents = car.parents.length ? `Child of ${esc(car.parents[0])} &times; ${esc(car.parents[1])}` : 'Randomly generated';
   const geneRows = car.genotype.map(g => {
     const w1 = g.mode === 'dominant' ? g.a1[0] >= g.a2[0] : g.mode === 'high' ? g.a1[1] >= g.a2[1] : g.mode === 'low' ? g.a1[1] <= g.a2[1] : null;
@@ -417,13 +493,17 @@ function renderDetail() {
       <td class="num">${g.expressed}</td></tr>`;
   }).join('');
   el.innerHTML = `
-    <h2><span id="detail-name">${esc(car.name)}</span>
+    <h2><span id="detail-name">${esc(car.name)}</span>${car.retired ? ' <span class="badge retired">retired</span>' : ''}
       <button class="small" id="btn-rename">Rename</button>
       <button class="small" id="btn-delete">Delete</button></h2>
     <div class="hint">Generation ${car.generation} &middot; ${parents}<br>
       ${car.races} runs &middot; odometer ${car.odometer_km.toFixed(2)} of ${car.stats.lifespan_km} km
       ${car.retired ? '&middot; <b>retired</b>' : ''}</div>
     <div id="detail-thumb"></div>
+    <div class="note-box">
+      <textarea id="car-note" maxlength="500" rows="3" placeholder="Notes about this car (shown in the garage)">${esc(car.note || '')}</textarea>
+      <button class="small" id="btn-save-note">Save note</button>
+    </div>
     ${trophyListHTML(car)}
     <div class="toolbar sound-row">
       <button class="small" id="btn-hear-engine">Hear engine</button>
@@ -445,6 +525,9 @@ function renderDetail() {
     if (name) { await api('/api/rename', { id: car.id, name }); loadAll(); }
   };
   el.querySelector('#btn-delete').onclick = () => deleteCar(car);
+  el.querySelector('#btn-save-note').onclick = async () => {
+    try { await api('/api/note', { id: car.id, note: el.querySelector('#car-note').value }); await loadAll(); } catch (e) { alert(e.message); }
+  };
 }
 
 async function deleteCar(car) {
@@ -810,7 +893,7 @@ function trialStandingsHTML(hall, player, car) {
     if (prev >= 0 && i > prev + 1) rows += '<tr class="gap"><td colspan="4">...</td></tr>';
     const e = hall[i];
     rows += `<tr class="${i === mine ? 'mine' : ''}"><td>${i + 1}.</td><td>${holderHTML(e)}</td>
-      <td>${e.looks && e.looks.width ? `<img class="car-icon" src="${carIconURL(e.looks)}"> ` : ''}${esc(e.car_name)}</td>
+      <td>${e.looks && e.looks.width ? `<img class="car-icon" src="${carIconURL(e.looks)}"> ` : ''}${esc(e.car_name)}${carById(e.car_id)?.retired ? ' <span class="badge retired">retired</span>' : ''}</td>
       <td>${e.finished ? fmtTime(e.time) : fmtKm(e.distance)}</td></tr>`;
     prev = i;
   }
@@ -953,7 +1036,7 @@ function standingsHTML() {
   const carRanks = sharedRanks(cars);
   const carRows = cars.slice(0, open ? cars.length : 20).map((x, i) => {
     const owner = profileById(x.car.owner);
-    return `<tr class="${x.car.owner === state.profileId ? 'mine' : ''}">
+    return `<tr class="${x.car.owner === state.profileId ? 'mine' : ''}${x.car.retired ? ' retired' : ''}">
       <td class="rank">${carRanks[i]}</td>
       <td><span class="icon-wrap small"><img class="car-icon" src="${carIconURL(x.car.looks)}" alt="">${starHTML(x.car)}</span>
         <b>${esc(x.car.name)}</b> ${trophyBadges(x.car)}${x.car.retired ? ' <span class="badge retired">retired</span>' : ''}</td>
@@ -990,7 +1073,7 @@ function renderRecords() {
     const shown = hall.map((e, i) => [e, i]).filter(([e, i]) => open || i < 10 || e.profile_id === state.profileId);
     const rows = shown.map(([e, i], n) => `
       ${n > 0 && shown[n - 1][1] !== i - 1 ? '<tr class="gap"><td colspan="5">&hellip;</td></tr>' : ''}
-      <tr class="${e.profile_id === state.profileId ? 'mine' : ''}">
+      <tr class="${e.profile_id === state.profileId ? 'mine' : ''}${carById(e.car_id)?.retired ? ' retired' : ''}">
         <td class="rank">${i === 0 ? '<span class="crown">#1</span>' : i + 1}</td>
         <td>${holderHTML(e)}</td>
         <td>${e.looks && e.looks.width ? `<img class="car-icon" src="${carIconURL(e.looks)}"> ` : ''}${esc(e.car_name)}</td>
