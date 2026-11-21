@@ -164,6 +164,14 @@
     <!-- INFO -->
     <section id="tab-info" class="tab">
       <h2>Info</h2>
+      <h3>Breeding and mutations</h3>
+      <p class="hint">Each parent passes one of its two chromosomes to the child, built by single-point crossover: genes that sit next to each other on the chromosome tend to be inherited together. Randomly generated and starter cars have no mutations, their genes are simply random.</p>
+      <p class="hint">After that, every allele the child receives gets two separate chances to mutate, each 2.5%:</p>
+      <ul class="hint">
+        <li><b>Value mutation:</b> the allele's value (0-255) shifts by a random amount of at most 40, up or down.</li>
+        <li><b>Dominance mutation:</b> the allele's dominance is replaced by a new random number from 0 to 255. This can change which allele is expressed.</li>
+      </ul>
+      <p class="hint">A child has about 82 alleles, so it gets roughly 4 mutations on average. Most are small value shifts. The game does not announce them: compare the child's genotype table with its parents' to spot one.</p>
       <h3>Genes</h3>
       <p class="hint">41 loci, each expressed in one of four ways: <code>dominant</code> (the allele with higher dominance wins), <code>avg</code> (additive), <code>low</code> (the weaker allele wins), <code>high</code> (one strong allele is enough).</p>
       <table class="genes info-genes">
