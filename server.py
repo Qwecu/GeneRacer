@@ -10,6 +10,7 @@ the admin account may act as any player.
 """
 
 import json
+import gzip
 import os
 import ssl
 import sys
@@ -305,6 +306,10 @@ class Handler(BaseHTTPRequestHandler):
     def _respond(self, code, content_type, body):
         self.send_response(code)
         self.send_header("Content-Type", content_type)
+        # Compress larger responses (the garage list is megabytes of JSON) when the browser accepts it
+        if len(body) > 1024 and "gzip" in self.headers.get("Accept-Encoding", ""):
+            body = gzip.compress(body, compresslevel=5)
+            self.send_header("Content-Encoding", "gzip")
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Cache-Control", "no-store")
         self.end_headers()
